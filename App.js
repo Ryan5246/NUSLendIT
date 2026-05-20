@@ -1,99 +1,58 @@
-import '@react-native-firebase/app';
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Image, SafeAreaView, Button, TouchableOpacity, Platform } from 'react-native';
+import 'react-native-gesture-handler';
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+
+// Firebase core app setups
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+
+import { HomeScreen, LoginScreen, SignUpScreen } from './screens/HomeScreen';
+
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyAzDhiFXwj-vhWvzs3PlVcLSpijvhV2OKw",
+  authDomain: "nus-lendit.firebaseapp.com",
+  projectId: "nus-lendit",
+  storageBucket: "nus-lendit.firebasestorage.app",
+  messagingSenderId: "199776577441",
+  appId: "1:199776577441:web:19ceca21d1a8d1f2df0de0",
+  measurementId: "G-G5ZPTQH9Y1"
+};
+
+// Firebase initialisation
+let app;
+let auth;
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+} else {
+  app = getApps()[0];
+  auth = getAuth(getApps()[0]);
+}
+
+const Stack = createStackNavigator();
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Image source={require('./assets/Logo.png')} style={styles.logo} />
-      <Text style={styles.title} >{'NUS LENDIT'}</Text>
-      <Text style={styles.subtitle} >Need it now? LendIT.</Text>
-      <TouchableOpacity style={styles.logInButton}>
-        <Text style={styles.buttonText}>Log In</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.signUpButton}>
-        <Text style={styles.signUpButtonText}>Sign Up</Text>
-      </TouchableOpacity>
-      <Image source={require('./assets/Skyline.png')} style={styles.skyline} resizeMode="contain"/>
-      <StatusBar style="auto" />
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        
+        <Stack.Screen name="Home" component={HomeScreen} />
+        
+        <Stack.Screen 
+          name="Login" 
+          component={LoginScreen} 
+          initialParams={{ auth: auth }}
+        />
+        
+        <Stack.Screen 
+          name="SignUp" 
+          component={SignUpScreen} 
+          initialParams={{ auth: auth }}
+        />
+
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#14004c',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logo: {
-    width:'50%',
-    height:'22%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 30
-  },
-  title: {
-    fontSize: 60,
-    color: '#ffffff',
-    letterSpacing: 2,
-    textAlign: 'center',
-    fontFamily: Platform.select({
-      ios: 'Avenir Next',
-      android: 'sans-serif-medium',
-    })
-  },
-  subtitle: {
-    fontSize: 30,
-    color: '#ffffff9f',
-    marginBottom: '15%',
-    fontFamily: Platform.select({
-      ios: 'Avenir Next',
-      android: 'sans-serif-medium',
-    })
-  },
-  logInButton: {
-    width: '80%',
-    height: '7.5%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#32007c',
-    borderRadius: 50
-  },
-  buttonText: {
-    fontSize: 40,
-    color: '#ffffff',
-    fontWeight: 'bold',
-    fontFamily: Platform.select({
-      ios: 'Avenir Next',
-      android: 'sans-serif-medium',
-    })
-  },
-  signUpButton: {
-    width: '80%',
-    height: '7.5%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 50,
-    marginTop: '3.5%',
-    marginBottom: '15%'
-  },
-  signUpButtonText: {
-    fontSize: 40,
-    color: '#32007c',
-    fontWeight: 'bold',
-    fontFamily: Platform.select({
-      ios: 'Avenir Next',
-      android: 'sans-serif-medium',
-})
-  },
-  skyline: {
-  position: 'absolute',
-  bottom: 0,
-  width: '100%',
-  height: '20%',
-},
-});
-
