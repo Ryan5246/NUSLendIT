@@ -2,12 +2,10 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View, Image, TouchableOpacity, TextInput, ScrollView, FlatProps, Platform, SafeAreaView } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-const Tab = createBottomTabNavigator();
-
-export default function DashboardScreen() {
+export default function PostScreen() {
     return(
         <SafeAreaView style={styles.container}>
-            <Text>Dashboard Screen</Text>
+            <Text>Post Screen</Text>
         </SafeAreaView>
     );
 }

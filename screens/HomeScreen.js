@@ -74,10 +74,10 @@ export function LoginScreen({ navigation, route }) {
 
       // Success
       Alert.alert('Success', 'Logged in successfully!');
-      
+      navigation.replace('MainTabs');
       // Clear fields upon successful entry
-      setEmail('');
-      setPassword('');
+      //setEmail('');
+      //setPassword('');
       
       // Next step: navigation.replace('Dashboard');
     } catch (error) {

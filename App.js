@@ -5,9 +5,13 @@ import { createStackNavigator } from '@react-navigation/stack';
 
 // Firebase core app setups
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { HomeScreen, LoginScreen, SignUpScreen } from './screens/HomeScreen';
+import DashboardScreen from './screens/DashboardScreen';
+
+import TabNavigator from './TabNavigator';
 
 // Firebase config
 const firebaseConfig = {
@@ -25,7 +29,9 @@ let app;
 let auth;
 if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
 } else {
   app = getApps()[0];
   auth = getAuth(getApps()[0]);
@@ -51,6 +57,8 @@ export default function App() {
           component={SignUpScreen} 
           initialParams={{ auth: auth }}
         />
+
+        <Stack.Screen name="MainTabs" component={TabNavigator} />
 
       </Stack.Navigator>
     </NavigationContainer>
