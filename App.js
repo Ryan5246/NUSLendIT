@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
 // Firebase core app setups
+import { auth } from './firebaseConfig';
 import { initializeApp, getApps } from 'firebase/app';
 import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,29 +14,6 @@ import DashboardScreen from './screens/DashboardScreen';
 
 import TabNavigator from './TabNavigator';
 
-// Firebase config
-const firebaseConfig = {
-  apiKey: "AIzaSyAzDhiFXwj-vhWvzs3PlVcLSpijvhV2OKw",
-  authDomain: "nus-lendit.firebaseapp.com",
-  projectId: "nus-lendit",
-  storageBucket: "nus-lendit.firebasestorage.app",
-  messagingSenderId: "199776577441",
-  appId: "1:199776577441:web:19ceca21d1a8d1f2df0de0",
-  measurementId: "G-G5ZPTQH9Y1"
-};
-
-// Firebase initialisation
-let app;
-let auth;
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
-  });
-} else {
-  app = getApps()[0];
-  auth = getAuth(getApps()[0]);
-}
 
 const Stack = createStackNavigator();
 

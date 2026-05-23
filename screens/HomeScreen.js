@@ -75,11 +75,7 @@ export function LoginScreen({ navigation, route }) {
       // Success
       Alert.alert('Success', 'Logged in successfully!');
       navigation.replace('MainTabs');
-      // Clear fields upon successful entry
-      //setEmail('');
-      //setPassword('');
       
-      // Next step: navigation.replace('Dashboard');
     } catch (error) {
       Alert.alert('Login Error', error.message);
     }
