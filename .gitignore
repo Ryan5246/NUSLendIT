@@ -43,3 +43,6 @@ yarn-error.*
 # firebase secret credentials
 google-services.json
 GoogleService-Info.plist
+
+# local environment secrets
+.env

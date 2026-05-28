@@ -3,14 +3,15 @@ import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/aut
 import { getFirestore } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Ingest credentials from .env file
 const firebaseConfig = {
-  apiKey: "AIzaSyAzDhiFXwj-vhWvzs3PlVcLSpijvhV2OKw",
-  authDomain: "nus-lendit.firebaseapp.com",
-  projectId: "nus-lendit",
-  storageBucket: "nus-lendit.firebasestorage.app",
-  messagingSenderId: "199776577441",
-  appId: "1:199776577441:web:19ceca21d1a8d1f2df0de0",
-  measurementId: "G-G5ZPTQH9Y1"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 let app;
