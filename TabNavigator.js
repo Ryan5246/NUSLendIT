@@ -7,6 +7,8 @@ import SearchScreen from './screens/SearchScreen';
 import PostScreen from './screens/PostScreen';
 import MapsScreen from './screens/MapsScreen';
 import ChatScreen from './screens/ChatScreen';
+import PostOTPScreen from './screens/PostOTPScreen';
+import OTPScreen from './screens/OTPScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -75,6 +77,28 @@ export default function TabNavigator() {
                 <Image source={require('./assets/Chat.png')} style={[styles.tabImage, { opacity: focused ? 1 : 0.6 }]} />
               )
             }}
+        />
+
+        <Tab.Screen
+          name='OTP'
+          component={PostOTPScreen}
+          options={{
+            title: 'OTP',
+            tabBarIcon: ({ focused }) => (
+              <Image source={require('./assets/Verify.png')} style={[styles.tabImage, { opacity: focused ? 1 : 0.6 }]}/>
+            )
+          }}
+        />
+
+        <Tab.Screen
+          name='Verify'
+          component={OTPScreen}
+          options={{
+            title: 'Verify',
+            tabBarIcon: ({ focused }) => (
+              <Image source={require('./assets/Verify.png')} style={[styles.tabImage, { opacity: focused ? 1 : 0.6 }]}/>
+            )
+          }}
         />
 
     </Tab.Navigator>

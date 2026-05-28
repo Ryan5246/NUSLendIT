@@ -13,21 +13,53 @@ import {
   ActivityIndicator
 } from 'react-native';
 
+import DateTimePicker from '@react-native-community/datetimepicker';
+
 // Firebase requirements
 import { db, auth } from '../firebaseConfig'; 
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
+// Helper function to format date objects cleanly into string format
+const formatDateString = (date) => {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
 
 // Requests page
 function RequestForm() {
   const [item, setItem] = useState('');
   const [location, setLocation] = useState('');
-  const [borrowDate, setBorrowDate] = useState('');
-  const [returnDate, setReturnDate] = useState('');
+  const [borrowDate, setBorrowDate] = useState(new Date());
+  const [returnDate, setReturnDate] = useState(new Date());
   const [willingToPay, setWillingToPay] = useState('');
   const [deposit, setDeposit] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Visibility toggles for picker modals
+  const [showBorrowPicker, setShowBorrowPicker] = useState(false);
+  const [showReturnPicker, setShowReturnPicker] = useState(false);
+
+  const handleBorrowDateChange = (event, selectedDate) => {
+    // Android automatically closes the dialog on change event types
+    if (Platform.OS === 'android') {
+      setShowBorrowPicker(false);
+    }
+    if (selectedDate) {
+      setBorrowDate(selectedDate);
+    }
+  };
+
+  const handleReturnDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowReturnPicker(false);
+    }
+    if (selectedDate) {
+      setReturnDate(selectedDate);
+    }
+  };
 
   const handlePostRequest = async () => {
     if (!item || !location || !borrowDate || !returnDate || !willingToPay || !deposit || !description) {
@@ -41,8 +73,8 @@ function RequestForm() {
         userId: auth.currentUser?.uid || 'anonymous_student', // Binds the post to the student account
         item: item,
         location: location,
-        borrowdate: borrowDate,
-        returndate: returnDate,
+        borrowdate: formatDateString(borrowDate),
+        returndate: formatDateString(returnDate),
         willingToPay: willingToPay,
         deposit: deposit,
         description: description,
@@ -54,8 +86,8 @@ function RequestForm() {
       // Clear form inputs on success
       setItem('');
       setLocation('');
-      setBorrowDate('');
-      setReturnDate('');
+      setBorrowDate(new Date());
+      setReturnDate(new Date());
       setWillingToPay('');
       setDeposit('');
       setDescription('');
@@ -78,11 +110,65 @@ function RequestForm() {
       <Text style={styles.label}>Location:</Text>
       <TextInput style={styles.input} placeholder="Eg: Temasek Hall" placeholderTextColor="#a0a0a0" value={location} onChangeText={setLocation} />
 
+      {/* Borrow Date Row Trigger */}
       <Text style={styles.label}>Borrow Date:</Text>
-      <TextInput style={styles.input} placeholder="Eg: 29/12/2026" placeholderTextColor="#a0a0a0" value={borrowDate} onChangeText={setBorrowDate} />
+      <TouchableOpacity 
+        style={styles.dropdownInput} 
+        onPress={() => {
+          setShowBorrowPicker(true);
+          setShowReturnPicker(false); // Mutually close the other picker
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.dropdownValueText}>{formatDateString(borrowDate)}</Text>
+        <Text style={styles.dropdownArrow}>▼</Text>
+      </TouchableOpacity>
+      
+      {/* iOS Specific Confirm Strip Bar */}
+      {showBorrowPicker && Platform.OS === 'ios' && (
+        <TouchableOpacity style={styles.pickerDoneStrip} onPress={() => setShowBorrowPicker(false)}>
+          <Text style={styles.pickerDoneText}>Confirm Borrow Date</Text>
+        </TouchableOpacity>
+      )}
+      {showBorrowPicker && (
+        <DateTimePicker
+          value={borrowDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          minimumDate={new Date()} 
+          onChange={handleBorrowDateChange}
+        />
+      )}
 
+      {/* Return Date Row Trigger */}
       <Text style={styles.label}>Return Date:</Text>
-      <TextInput style={styles.input} placeholder="Eg: 31/12/2026" placeholderTextColor="#a0a0a0" value={returnDate} onChangeText={setReturnDate} />
+      <TouchableOpacity 
+        style={styles.dropdownInput} 
+        onPress={() => {
+          setShowReturnPicker(true);
+          setShowBorrowPicker(false); // Mutually close the other picker
+        }}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.dropdownValueText}>{formatDateString(returnDate)}</Text>
+        <Text style={styles.dropdownArrow}>▼</Text>
+      </TouchableOpacity>
+
+      {/* iOS Specific Confirm Strip Bar */}
+      {showReturnPicker && Platform.OS === 'ios' && (
+        <TouchableOpacity style={styles.pickerDoneStrip} onPress={() => setShowReturnPicker(false)}>
+          <Text style={styles.pickerDoneText}>Confirm Return Date</Text>
+        </TouchableOpacity>
+      )}
+      {showReturnPicker && (
+        <DateTimePicker
+          value={returnDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          minimumDate={borrowDate} 
+          onChange={handleReturnDateChange}
+        />
+      )}
 
       <Text style={styles.label}>Willing To Pay:</Text>
       <TextInput style={styles.input} placeholder="Eg: 1.70" placeholderTextColor="#a0a0a0" value={willingToPay} onChangeText={setWillingToPay} />
@@ -256,8 +342,7 @@ const styles = StyleSheet.create({
   formContextTitle: { 
     fontSize: 15, 
     color: '#8e8e93', 
-    fontWeight: '600', 
-    marginBottom: 10 
+    fontWeight: '600',  
   },
   scrollContent: { 
     paddingHorizontal: 24, 
@@ -303,5 +388,42 @@ const styles = StyleSheet.create({
     fontSize: 20, 
     fontWeight: 'bold', 
     color: '#ffffff' 
+  },
+  dropdownInput: {
+    width: '100%',
+    height: 50,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#fafafa',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  dropdownValueText: { 
+    fontSize: 16, 
+    color: '#333333' 
+  },
+  dropdownArrow: { 
+    fontSize: 12, 
+    color: '#14004c' 
+  },
+  pickerDoneStrip: {
+    width: '100%',
+    backgroundColor: '#f0f0f5',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignItems: 'flex-end',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5ea',
+    marginTop: 6,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  pickerDoneText: {
+    color: '#14004c',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });

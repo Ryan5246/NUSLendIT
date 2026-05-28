@@ -74,7 +74,10 @@ export function LoginScreen({ navigation, route }) {
 
       // Success
       Alert.alert('Success', 'Logged in successfully!');
-      navigation.replace('MainTabs');
+      navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+});
       
     } catch (error) {
       Alert.alert('Login Error', error.message);
