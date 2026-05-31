@@ -68,7 +68,7 @@ export function LoginScreen({ navigation, route }) {
         
         return Alert.alert(
           'Account Unverified', 
-          'Please check your NUS inbox and click the verification link before logging in.'
+          'Please check your inbox (or Microsoft Defender Quarantine) and click the verification link before logging in.'
         );
       }
 
@@ -164,8 +164,8 @@ export function SignUpScreen({ navigation, route }) {
       await sendEmailVerification(userCredential.user);
       
       Alert.alert(
-        'Verification Sent!', 
-        'A verification link has been sent to your NUS inbox. Please verify before logging in.', 
+        'Email Sent!', 
+        'A verification link has been sent to your inbox (or Microsoft Defender Quarantine). Please verify before logging in.', 
         [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
       );
       
