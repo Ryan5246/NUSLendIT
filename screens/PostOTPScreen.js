@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as Notifications from 'expo-notifications';
+import { StatusBar } from 'expo-status-bar'
 
 import {
   StyleSheet,

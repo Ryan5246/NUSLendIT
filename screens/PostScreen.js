@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  KeyboardAvoidingView, 
+
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  KeyboardAvoidingView,
   Platform,
   Alert,
   SafeAreaView,
@@ -16,7 +17,7 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Firebase requirements
-import { db, auth } from '../firebaseConfig'; 
+import { db, auth } from '../firebaseConfig';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 // Helper function to format date objects cleanly into string format
@@ -82,7 +83,7 @@ function RequestForm() {
       });
 
       Alert.alert('Success', 'Your borrow request has been posted!');
-      
+
       // Clear form inputs on success
       setItem('');
       setLocation('');
@@ -112,8 +113,8 @@ function RequestForm() {
 
       {/* Borrow Date Row Trigger */}
       <Text style={styles.label}>Borrow Date:</Text>
-      <TouchableOpacity 
-        style={styles.dropdownInput} 
+      <TouchableOpacity
+        style={styles.dropdownInput}
         onPress={() => {
           setShowBorrowPicker(true);
           setShowReturnPicker(false); // Mutually close the other picker
@@ -123,7 +124,7 @@ function RequestForm() {
         <Text style={styles.dropdownValueText}>{formatDateString(borrowDate)}</Text>
         <Text style={styles.dropdownArrow}>▼</Text>
       </TouchableOpacity>
-      
+
       {/* iOS Specific Confirm Strip Bar */}
       {showBorrowPicker && Platform.OS === 'ios' && (
         <TouchableOpacity style={styles.pickerDoneStrip} onPress={() => setShowBorrowPicker(false)}>
@@ -135,15 +136,15 @@ function RequestForm() {
           value={borrowDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          minimumDate={new Date()} 
+          minimumDate={new Date()}
           onChange={handleBorrowDateChange}
         />
       )}
 
       {/* Return Date Row Trigger */}
       <Text style={styles.label}>Return Date:</Text>
-      <TouchableOpacity 
-        style={styles.dropdownInput} 
+      <TouchableOpacity
+        style={styles.dropdownInput}
         onPress={() => {
           setShowReturnPicker(true);
           setShowBorrowPicker(false); // Mutually close the other picker
@@ -165,7 +166,7 @@ function RequestForm() {
           value={returnDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          minimumDate={borrowDate} 
+          minimumDate={borrowDate}
           onChange={handleReturnDateChange}
         />
       )}
@@ -215,7 +216,7 @@ function ListingForm() {
       });
 
       Alert.alert('Success', 'Your item listing has been posted!');
-      
+
       setItem('');
       setLocation('');
       setCostPerDay('');
@@ -268,7 +269,7 @@ export default function PostScreen() {
       >
         <View style={styles.toggleWrapper}>
           <View style={styles.toggleContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.toggleButton, activeTab === 'Request' && styles.toggleButtonActive]}
               onPress={() => setActiveTab('Request')}
               activeOpacity={0.9}
@@ -276,7 +277,7 @@ export default function PostScreen() {
               <Text style={[styles.toggleText, activeTab === 'Request' && styles.toggleTextActive]}>Request</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.toggleButton, activeTab === 'List' && styles.toggleButtonActive]}
               onPress={() => setActiveTab('List')}
               activeOpacity={0.9}
@@ -295,99 +296,99 @@ export default function PostScreen() {
 
 // Layout styling parameters
 const styles = StyleSheet.create({
-  safeAreaContainer: { 
-    flex: 1, 
-    backgroundColor: '#ffffff' 
+  safeAreaContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff'
   },
-  container: { 
-    flex: 1 
+  container: {
+    flex: 1
   },
-  toggleWrapper: { 
-    paddingHorizontal: 24, 
-    paddingTop: 12, 
-    paddingBottom: 8, 
-    backgroundColor: '#ffffff' 
+  toggleWrapper: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
+    backgroundColor: '#ffffff'
   },
-  toggleContainer: { 
-    flexDirection: 'row', 
-    backgroundColor: '#f0f0f5', 
-    borderRadius: 16, 
-    padding: 4, 
-    borderWidth: 1, 
-    borderColor: '#e5e5ea' 
+  toggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f0f0f5',
+    borderRadius: 16,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#e5e5ea'
   },
-  toggleButton: { 
-    flex: 1, 
-    paddingVertical: 12, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderRadius: 12 
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12
   },
-  toggleButtonActive: { 
-    backgroundColor: '#14004c', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.15, 
-    shadowRadius: 4, 
-    elevation: 2 
+  toggleButtonActive: {
+    backgroundColor: '#14004c',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2
   },
-  toggleText: { 
-    fontSize: 16, 
-    fontWeight: '700', 
-    color: '#636366' 
+  toggleText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#636366'
   },
-  toggleTextActive: { 
-    color: '#ffffff' 
+  toggleTextActive: {
+    color: '#ffffff'
   },
-  formContextTitle: { 
-    fontSize: 15, 
-    color: '#8e8e93', 
-    fontWeight: '600',  
+  formContextTitle: {
+    fontSize: 15,
+    color: '#8e8e93',
+    fontWeight: '600',
   },
-  scrollContent: { 
-    paddingHorizontal: 24, 
-    paddingTop: 15, 
-    paddingBottom: 80 
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 15,
+    paddingBottom: 80
   },
-  label: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: '#14004c', 
-    marginTop: 14, 
-    marginBottom: 6 
+  label: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#14004c',
+    marginTop: 14,
+    marginBottom: 6
   },
-  input: { 
-    width: '100%', 
-    height: 50, 
-    borderWidth: 1.5, 
-    borderColor: '#e0e0e0', 
-    borderRadius: 14, 
-    paddingHorizontal: 16, 
-    fontSize: 16, 
-    color: '#333333', 
-    backgroundColor: '#fafafa' 
+  input: {
+    width: '100%',
+    height: 50,
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: '#333333',
+    backgroundColor: '#fafafa'
   },
-  textArea: { 
-    height: 110, 
-    paddingTop: 12, 
-    textAlignVertical: 'top' 
+  textArea: {
+    height: 110,
+    paddingTop: 12,
+    textAlignVertical: 'top'
   },
-  submitButton: { 
-    width: '100%', 
-    height: 56, 
-    backgroundColor: '#14004c', 
-    borderRadius: 28, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginTop: 30 
+  submitButton: {
+    width: '100%',
+    height: 56,
+    backgroundColor: '#14004c',
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 30
   },
-  listingSubmitBtn: { 
-    backgroundColor: '#2e2270' 
+  listingSubmitBtn: {
+    backgroundColor: '#2e2270'
   },
-  submitButtonText: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#ffffff' 
+  submitButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff'
   },
   dropdownInput: {
     width: '100%',
@@ -401,13 +402,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center'
   },
-  dropdownValueText: { 
-    fontSize: 16, 
-    color: '#333333' 
+  dropdownValueText: {
+    fontSize: 16,
+    color: '#333333'
   },
-  dropdownArrow: { 
-    fontSize: 12, 
-    color: '#14004c' 
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#14004c'
   },
   pickerDoneStrip: {
     width: '100%',
