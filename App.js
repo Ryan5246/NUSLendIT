@@ -3,6 +3,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
+
 // Firebase core app setups
 import { auth } from './firebaseConfig';
 import { initializeApp, getApps } from 'firebase/app';
@@ -21,18 +22,18 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        
+
         <Stack.Screen name="Home" component={HomeScreen} />
-        
-        <Stack.Screen 
-          name="Login" 
-          component={LoginScreen} 
+
+        <Stack.Screen
+          name="Login"
+          component={LoginScreen}
           initialParams={{ auth: auth }}
         />
-        
-        <Stack.Screen 
-          name="SignUp" 
-          component={SignUpScreen} 
+
+        <Stack.Screen
+          name="SignUp"
+          component={SignUpScreen}
           initialParams={{ auth: auth }}
         />
 

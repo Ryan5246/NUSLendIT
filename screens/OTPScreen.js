@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import * as Notifications from 'expo-notifications';
+import { StatusBar } from 'expo-status-bar';
 
 import {
     View,
@@ -19,6 +21,16 @@ import {
 import { db } from "../firebaseConfig";
 
 import generateOTP from "../utils/generateOTP";
+
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+
+    }),
+});
 
 export default function OTPScreen() {
 
@@ -44,6 +56,14 @@ export default function OTPScreen() {
                 }
             );
 
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: "OTP Generated",
+                    body: `Your OTP is ${otp}`,
+                },
+                trigger: null,
+            });
+
             Alert.alert("OTP Generated", otp);
 
         } catch (error) {
@@ -54,6 +74,17 @@ export default function OTPScreen() {
     };
 
     useEffect(() => {
+
+        (async () => {
+            const { status } =
+                await Notifications.requestPermissionsAsync();
+
+            if (status !== "granted") {
+                Alert.alert("Notification permission denied");
+            }
+        })();
+
+
 
         const unsubscribe = onSnapshot(
             doc(db, "transactions", "testTransaction"),
