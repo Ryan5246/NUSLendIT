@@ -28,7 +28,7 @@ export default function DashboardScreen({ navigation }) {
     let unsubscribeBorrow = () => {};
     let unsubscribeLend = () => {};
 
-    // 1. Fetch current user's profile handle
+    // Fetch current user's profile handle
     const fetchUserProfile = async () => {
       try {
         const docSnap = await getDoc(doc(db, 'username', currentUserId));
@@ -43,7 +43,7 @@ export default function DashboardScreen({ navigation }) {
     };
     fetchUserProfile();
 
-    // 2. 👈 BI-DIRECTIONAL BLOCK LISTENER: Track both blocker and blocked relationships
+    // BI-DIRECTIONAL BLOCK LISTENER: Track both blocker and blocked relationships
     const blocksQuery = query(collection(db, 'blocks'));
     
     const unsubscribeBlocks = onSnapshot(blocksQuery, (blocksSnapshot) => {
@@ -62,7 +62,7 @@ export default function DashboardScreen({ navigation }) {
       unsubscribeBorrow();
       unsubscribeLend();
 
-      // 3. Stream latest request posted by another student (excluding bidirectional blocks)
+      // Stream latest request posted by another student (excluding bidirectional blocks)
       const qBorrow = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
       unsubscribeBorrow = onSnapshot(qBorrow, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -77,7 +77,7 @@ export default function DashboardScreen({ navigation }) {
         }
       });
 
-      // 4. Stream latest listing posted by another student (excluding bidirectional blocks)
+      // Stream latest listing posted by another student (excluding bidirectional blocks)
       const qLend = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
       unsubscribeLend = onSnapshot(qLend, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));

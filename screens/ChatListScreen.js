@@ -28,7 +28,7 @@ function ChatRoomCard({ room, currentUserId, onOpen }) {
     fetchPeerHandle();
   }, [peerId]);
 
-  // 👈 NEW: Check if the last message was sent before the user cleared their history
+  // Check if the last message was sent before the user cleared their history
   const clearTime = room.clearedTimestamps?.[currentUserId] || 0;
   const msgTime = room.lastMessageTimestamp || 0;
   const showPreviewText = msgTime > clearTime;
@@ -49,7 +49,6 @@ function ChatRoomCard({ room, currentUserId, onOpen }) {
       </View>
       <Text style={styles.itemContext}>Regarding: {room.itemTitle || 'Marketplace Item'}</Text>
       <Text style={styles.lastMessagePreview} numberOfLines={1}>
-        {/* 👈 DYNAMIC PREVIEW TEXT MASKING */}
         {showPreviewText ? (room.lastMessageText || 'No messages exchanged yet...') : 'History cleared'}
       </Text>
     </TouchableOpacity>

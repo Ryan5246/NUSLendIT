@@ -37,7 +37,7 @@ export default function SearchScreen({ navigation, route }) {
     let unsubscribeRequests = () => {};
     let unsubscribeListings = () => {};
 
-    // 👈 FIXED: Listen for blocks where you are the blocker OR the blocked user
+    // Listen for blocks (blocker OR blocked user)
     const blocksQuery = query(collection(db, 'blocks'));
     
     const unsubscribeBlocks = onSnapshot(blocksQuery, (blocksSnapshot) => {
