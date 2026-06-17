@@ -3,6 +3,9 @@ import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Image, TouchableOpacity, Platform, TextInput, Alert, KeyboardAvoidingView, ScrollView, SafeAreaView } from 'react-native';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail } from 'firebase/auth';
 
+import { db } from '../firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
+
 // HomeScreen
 export function HomeScreen({ navigation }) {
   return (
@@ -65,20 +68,30 @@ export function LoginScreen({ navigation, route }) {
       if (!user.emailVerified) {
         // Force log them out
         await auth.signOut(); 
-        
         return Alert.alert(
           'Account Unverified', 
-          'Please check your NUS inbox and click the verification link before logging in.'
+          'Please check your inbox (or Microsoft Defender Quarantine) and click the verification link before logging in.'
         );
       }
 
       // Success
-      Alert.alert('Success', 'Logged in successfully!');
-      navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-});
-      
+      const userDocRef = doc(db, 'username', user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (userDocSnap.exists()) {
+        // RETURNING STUDENT: Account has a username profile -> proceed straight to application
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        });
+      } else {
+        // FIRST-TIME LOGGED IN STUDENT: Missing a handle profile -> route to onboarding gate
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'SetUsername' }],
+        });
+      }
+          
     } catch (error) {
       Alert.alert('Login Error', error.message);
     }
@@ -164,8 +177,8 @@ export function SignUpScreen({ navigation, route }) {
       await sendEmailVerification(userCredential.user);
       
       Alert.alert(
-        'Verification Sent!', 
-        'A verification link has been sent to your NUS inbox. Please verify before logging in.', 
+        'Email Sent!', 
+        'A verification link has been sent to your inbox (or Microsoft Defender Quarantine). Please verify before logging in.', 
         [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
       );
       

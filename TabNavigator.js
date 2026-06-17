@@ -2,6 +2,8 @@ import React from 'react';
 import { Platform, Image, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
+import ChatStackNavigator from './ChatStackNavigator';
+
 import DashboardScreen from './screens/DashboardScreen';
 import SearchScreen from './screens/SearchScreen';
 import PostScreen from './screens/PostScreen';
@@ -71,7 +73,7 @@ export default function TabNavigator() {
 
         <Tab.Screen 
             name='Chat' 
-            component={ChatScreen} 
+            component={ChatStackNavigator} 
             options={{title: 'Chat', 
               tabBarIcon: ({focused}) => (
                 <Image source={require('./assets/Chat.png')} style={[styles.tabImage, { opacity: focused ? 1 : 0.6 }]} />

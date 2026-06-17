@@ -11,6 +11,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { HomeScreen, LoginScreen, SignUpScreen } from './screens/HomeScreen';
 import DashboardScreen from './screens/DashboardScreen';
+import SetUsernameScreen from './screens/SetUsernameScreen';
+import PostOTPScreen from './screens/PostOTPScreen';
 
 import TabNavigator from './TabNavigator';
 
@@ -36,7 +38,9 @@ export default function App() {
           initialParams={{ auth: auth }}
         />
 
+        <Stack.Screen name="SetUsername" component={SetUsernameScreen} />
         <Stack.Screen name="MainTabs" component={TabNavigator} />
+        <Stack.Screen name="PostOTP" component={PostOTPScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>
