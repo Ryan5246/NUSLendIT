@@ -1,26 +1,90 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import * as Notifications from 'expo-notifications';
-import { StatusBar } from 'expo-status-bar'
+import { StatusBar } from 'expo-status-bar';
 
 import {
-  StyleSheet,
-  Text,
-  SafeAreaView,
   View,
-} from 'react-native';
+  Alert,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
 
 import {
   doc,
+  setDoc,
   onSnapshot,
-} from 'firebase/firestore';
+  updateDoc,
+} from "firebase/firestore";
 
-import { db } from '../firebaseConfig';
+import { db } from "../firebaseConfig";
 
-export default function PostOTPScreen() {
+import generateOTP from "../utils/generateOTP";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+
+  }),
+});
+
+export default function OTPScreen() {
 
   const [transaction, setTransaction] = useState(null);
 
+  const [enteredOtp, setEnteredOtp] = useState("");
+
+  // GENERATE OTP
+  const createOTP = async () => {
+
+    const otp = generateOTP();
+
+    try {
+
+      await setDoc(
+        doc(db, "transactions", "testTransaction"),
+        {
+          lenderId: "user1",
+          borrowerId: "user2",
+          otp: otp,
+          status: "approved",
+          createdAt: Date.now(),
+        }
+      );
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "OTP Generated",
+          body: `Your OTP is ${otp}`,
+        },
+        trigger: null,
+      });
+
+      Alert.alert("OTP Generated", otp);
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+  };
+
   useEffect(() => {
+
+    (async () => {
+      const { status } =
+        await Notifications.requestPermissionsAsync();
+
+      if (status !== "granted") {
+        Alert.alert("Notification permission denied");
+      }
+    })();
+
+
 
     const unsubscribe = onSnapshot(
       doc(db, "transactions", "testTransaction"),
@@ -38,31 +102,69 @@ export default function PostOTPScreen() {
 
   }, []);
 
+  // VERIFY OTP
+  const verifyOTP = async () => {
+
+    if (!transaction) return;
+
+    if (enteredOtp === transaction.otp) {
+
+      await updateDoc(
+        doc(db, "transactions", "testTransaction"),
+        {
+          status: "completed",
+        }
+      );
+
+      Alert.alert("SUCCESSFUL");
+
+    } else {
+
+      Alert.alert("ERROR", "Wrong OTP");
+
+    }
+  };
+
   return (
 
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
 
       <Text style={styles.title}>
-        Your OTP
+        Lender Verification
       </Text>
 
-      <View style={styles.otpBox}>
-
-        <Text style={styles.otpText}>
-          {transaction?.otp || "------"}
+      <TouchableOpacity
+        style={styles.generateButton}
+        onPress={createOTP}
+      >
+        <Text style={styles.buttonText}>
+          Generate OTP
         </Text>
+      </TouchableOpacity>
 
-      </View>
+      <TextInput
+        placeholder="Enter OTP"
+        placeholderTextColor="#999"
+        value={enteredOtp}
+        onChangeText={setEnteredOtp}
+        keyboardType="numeric"
+        style={styles.input}
+      />
 
-      <Text style={styles.infoText}>
-        Tell this OTP to the lender
-      </Text>
+      <TouchableOpacity
+        style={styles.verifyButton}
+        onPress={verifyOTP}
+      >
+        <Text style={styles.buttonText}>
+          Verify OTP
+        </Text>
+      </TouchableOpacity>
 
       <Text style={styles.status}>
-        Status: {transaction?.status || "pending"}
+        Status: {transaction?.status || "none"}
       </Text>
 
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -70,44 +172,55 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#14004c',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#14004c",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
 
   title: {
-    fontSize: 34,
-    color: 'white',
+    color: "white",
+    fontSize: 30,
+    fontWeight: "bold",
     marginBottom: 40,
-    fontWeight: 'bold',
   },
 
-  otpBox: {
-    backgroundColor: 'white',
-    paddingVertical: 30,
-    paddingHorizontal: 60,
-    borderRadius: 25,
+  generateButton: {
+    backgroundColor: "#5E17EB",
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderRadius: 15,
+    marginBottom: 30,
   },
 
-  otpText: {
-    fontSize: 42,
-    fontWeight: 'bold',
-    color: '#14004c',
-    letterSpacing: 6,
+  verifyButton: {
+    backgroundColor: "#00C851",
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderRadius: 15,
+    marginTop: 20,
   },
 
-  infoText: {
-    marginTop: 30,
-    color: '#ccc',
+  buttonText: {
+    color: "white",
     fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  input: {
+    backgroundColor: "white",
+    width: "80%",
+    borderRadius: 15,
+    padding: 15,
+    fontSize: 20,
+    color: "black",
+    textAlign: "center",
   },
 
   status: {
-    marginTop: 40,
-    color: 'white',
-    fontSize: 22,
-    fontWeight: 'bold',
+    color: "white",
+    marginTop: 30,
+    fontSize: 20,
   },
 
 });
