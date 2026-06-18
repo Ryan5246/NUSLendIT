@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { db, auth } from '../firebaseConfig';
 import { doc, setDoc, getDocs, collection, query, where } from 'firebase/firestore';
+import { registerForPushNotificationsAsync } from '../utils/notifications';
 
 export default function SetUsernameScreen({ navigation }) {
   const [username, setUsername] = useState('');
@@ -49,14 +50,18 @@ export default function SetUsernameScreen({ navigation }) {
       }
 
       // 3. Write profile mapping record payload to Firestore
+      const pushToken =
+        await registerForPushNotificationsAsync();
+
       await setDoc(doc(db, 'username', currentUserId), {
         username: cleanUsername,
         email: currentUserEmail,
+        expoPushToken: pushToken || '',
         createdAt: Date.now(),
       });
 
       Alert.alert('Profile Configured', `Welcome to LendIT, @${cleanUsername}!`);
-      
+
       // 4. Wipe history stack and push to MainTabs
       navigation.reset({
         index: 0,
@@ -73,8 +78,8 @@ export default function SetUsernameScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
-      <KeyboardAvoidingView 
-        style={styles.container} 
+      <KeyboardAvoidingView
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <Text style={styles.title}>Claim Your Handle</Text>
