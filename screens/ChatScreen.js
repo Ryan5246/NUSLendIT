@@ -12,8 +12,8 @@ import {
   Alert
 } from 'react-native';
 import { db, auth } from '../firebaseConfig';
-import { 
-  collection, doc, getDoc, query, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp, setDoc, deleteDoc 
+import {
+  collection, doc, getDoc, query, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp, setDoc, deleteDoc
 } from 'firebase/firestore';
 
 export default function ChatScreen({ route, navigation }) {
@@ -49,7 +49,7 @@ export default function ChatScreen({ route, navigation }) {
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.headerMenuButton}
           onPress={() => {
             const activeChatId = paramsRef.current.chatId;
@@ -171,6 +171,43 @@ export default function ChatScreen({ route, navigation }) {
       unsubscribeMessages();
     };
   }, [chatId, currentUserId]);
+  const sendPushNotification = async (recipientId, messageText) => {
+    try {
+      const recipientDoc = await getDoc(
+        doc(db, 'username', recipientId)
+      );
+
+      if (!recipientDoc.exists()) return;
+
+      const pushToken = recipientDoc.data()?.expoPushToken;
+
+      if (!pushToken) return;
+
+      await fetch(
+        'https://exp.host/--/api/v2/push/send',
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Accept-encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: pushToken,
+            sound: 'default',
+            title: 'New Message',
+            body: messageText,
+            data: {
+              chatId,
+              senderId: currentUserId,
+            },
+          }),
+        }
+      );
+    } catch (error) {
+      console.log('Push notification error:', error);
+    }
+  };
 
   const handleSendMessage = async () => {
     const cleanMsg = inputText.trim();
@@ -179,12 +216,12 @@ export default function ChatScreen({ route, navigation }) {
     try {
       const blockCheckId1 = `${currentUserId}_${peerId}`;
       const blockCheckId2 = `${peerId}_${currentUserId}`;
-      
+
       const snap1 = await getDoc(doc(db, 'blocks', blockCheckId1));
       const snap2 = await getDoc(doc(db, 'blocks', blockCheckId2));
 
-      if ((snap1.exists() && Object.keys(snap1.data() || {}).length > 0) || 
-          (snap2.exists() && Object.keys(snap2.data() || {}).length > 0)) {
+      if ((snap1.exists() && Object.keys(snap1.data() || {}).length > 0) ||
+        (snap2.exists() && Object.keys(snap2.data() || {}).length > 0)) {
         Alert.alert("Action Blocked", "You cannot exchange messages with this student channel.");
         return;
       }
@@ -198,10 +235,16 @@ export default function ChatScreen({ route, navigation }) {
       });
 
       const chatRoomDocRef = doc(db, 'chats', chatId);
+
       await updateDoc(chatRoomDocRef, {
         lastMessageText: cleanMsg,
         lastMessageTimestamp: Date.now(),
       });
+
+      await sendPushNotification(
+        peerId,
+        cleanMsg
+      );
 
     } catch (error) {
       console.error("Message write error: ", error);
@@ -240,7 +283,7 @@ export default function ChatScreen({ route, navigation }) {
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={renderMessageBubble}
-        inverted={true} 
+        inverted={true}
         contentContainerStyle={styles.scrollListPadding}
         showsVerticalScrollIndicator={false}
       />
@@ -259,9 +302,9 @@ export default function ChatScreen({ route, navigation }) {
             multiline
             editable={!isPeerBlocked}
           />
-          <TouchableOpacity 
-            style={[styles.dispatchButton, isPeerBlocked && { backgroundColor: '#cccccc' }]} 
-            onPress={handleSendMessage} 
+          <TouchableOpacity
+            style={[styles.dispatchButton, isPeerBlocked && { backgroundColor: '#cccccc' }]}
+            onPress={handleSendMessage}
             disabled={isPeerBlocked}
             activeOpacity={0.8}
           >
@@ -279,11 +322,11 @@ const styles = StyleSheet.create({
   fallbackText: { color: '#8e8e93', fontSize: 15, textAlign: 'center' },
   headerMenuButton: { paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center' },
   headerMenuText: { color: '#ffffff', fontSize: 22, fontWeight: 'bold' },
-  contextInfoBar: { 
-    backgroundColor: '#f0f0f5', 
-    paddingVertical: 10, 
-    paddingHorizontal: 16, 
-    borderBottomWidth: 1, 
+  contextInfoBar: {
+    backgroundColor: '#f0f0f5',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
     borderBottomColor: '#e5e5ea',
     alignItems: 'center'
   },
@@ -298,23 +341,23 @@ const styles = StyleSheet.create({
   myBubbleText: { color: '#ffffff', fontSize: 16, lineHeight: 22 },
   theirBubble: { backgroundColor: '#f0f0f5', borderBottomLeftRadius: 4 },
   theirBubbleText: { color: '#14004c', fontSize: 16, lineHeight: 22 },
-  inputActionRow: { 
-    flexDirection: 'row', 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    alignItems: 'center', 
+  inputActionRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignItems: 'center',
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e5ea'
   },
-  textInputBox: { 
-    flex: 1, 
-    backgroundColor: '#fafafa', 
-    color: '#222222', 
-    borderRadius: 22, 
-    paddingHorizontal: 16, 
-    paddingVertical: 10, 
-    fontSize: 16, 
+  textInputBox: {
+    flex: 1,
+    backgroundColor: '#fafafa',
+    color: '#222222',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    fontSize: 16,
     maxHeight: 90,
     borderWidth: 1.5,
     borderColor: '#e0e0e0'

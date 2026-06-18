@@ -1,6 +1,4 @@
-<<<<<<< HEAD
-import React, { useState } from 'react';
-
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,17 +7,6 @@ import {
   TouchableOpacity,
   ScrollView,
   KeyboardAvoidingView,
-=======
-import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  ScrollView, 
-  KeyboardAvoidingView, 
->>>>>>> 10cffe02ff1ef55eccbf1c10c2294362693c4dbd
   Platform,
   Alert,
   SafeAreaView,
@@ -29,13 +16,8 @@ import {
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 // Firebase requirements
-<<<<<<< HEAD
 import { db, auth } from '../firebaseConfig';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-=======
-import { db, auth } from '../firebaseConfig'; 
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
->>>>>>> 10cffe02ff1ef55eccbf1c10c2294362693c4dbd
 
 // Helper function to format date objects cleanly into string format
 const formatDateString = (date) => {
@@ -53,7 +35,7 @@ function RequestForm() {
     const fetchUsername = async () => {
       const currentUserId = auth.currentUser?.uid;
       if (!currentUserId) return;
-      
+
       const docSnap = await getDoc(doc(db, 'username', currentUserId));
       if (docSnap.exists()) {
         setUsername(docSnap.data().username);
@@ -229,7 +211,7 @@ function ListingForm() {
     const fetchUsername = async () => {
       const currentUserId = auth.currentUser?.uid;
       if (!currentUserId) return;
-      
+
       const docSnap = await getDoc(doc(db, 'username', currentUserId));
       if (docSnap.exists()) {
         setUsername(docSnap.data().username);
