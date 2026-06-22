@@ -13,7 +13,19 @@ import {
 } from 'react-native';
 import { db, auth } from '../firebaseConfig';
 import {
-  collection, doc, getDoc, query, orderBy, onSnapshot, addDoc, updateDoc, serverTimestamp, setDoc, deleteDoc
+  collection,
+  doc,
+  getDoc,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  serverTimestamp,
+  setDoc,
+  deleteDoc,
+  where,
+  getDocs
 } from 'firebase/firestore';
 
 export default function ChatScreen({ route, navigation }) {
@@ -34,7 +46,7 @@ export default function ChatScreen({ route, navigation }) {
     console.log("📍 Active Chat Pointer Diagnostics -> chatId:", chatId, "| peerId:", peerId);
   }, [chatId, peerId]);
 
-  // Real-time listener to check if this specific peer is blocked by us
+
   useEffect(() => {
     if (!currentUserId || !peerId) return;
     const blockId = `${currentUserId}_${peerId}`;
@@ -45,7 +57,7 @@ export default function ChatScreen({ route, navigation }) {
     return () => unsubscribe();
   }, [currentUserId, peerId]);
 
-  // Inject upper header navigation options dynamically
+
   React.useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -76,7 +88,7 @@ export default function ChatScreen({ route, navigation }) {
     });
   }, [navigation, isPeerBlocked]);
 
-  // LOCAL DELETE: Sets a timestamp threshold; filters out older messages locally without dropping the room
+
   const executeClearHistory = async (targetId) => {
     if (!targetId) return;
     try {
@@ -90,7 +102,7 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
-  // BLOCK USER: Drops a record in global block registry, locks inputs, but leaves room visible
+
   const executeBlockWithParams = async (targetPeerId) => {
     if (!targetPeerId || !currentUserId) return;
     try {
@@ -106,7 +118,7 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
-  // UNBLOCK USER: Deletes block document registry state clean
+
   const executeUnblock = async (targetPeerId) => {
     if (!targetPeerId || !currentUserId) return;
     try {
@@ -118,7 +130,7 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
-  // Look up trading peer handle profiles
+
   useEffect(() => {
     const fetchPeerHandle = async () => {
       if (!peerId) return;
@@ -135,7 +147,7 @@ export default function ChatScreen({ route, navigation }) {
     fetchPeerHandle();
   }, [peerId]);
 
-  // Real-time multi-layered snapshot subscriber messaging pipeline
+
   useEffect(() => {
     if (!chatId) return;
 
@@ -173,9 +185,8 @@ export default function ChatScreen({ route, navigation }) {
   }, [chatId, currentUserId]);
   const sendPushNotification = async (recipientId, messageText) => {
     try {
-      const recipientDoc = await getDoc(
-        doc(db, 'username', recipientId)
-      );
+      // Get recipient's push token
+      const recipientDoc = await getDoc(doc(db, 'username', recipientId));
 
       if (!recipientDoc.exists()) return;
 
@@ -183,30 +194,166 @@ export default function ChatScreen({ route, navigation }) {
 
       if (!pushToken) return;
 
-      await fetch(
-        'https://exp.host/--/api/v2/push/send',
-        {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Accept-encoding': 'gzip, deflate',
-            'Content-Type': 'application/json',
+      // Get sender's username
+      const senderDoc = await getDoc(doc(db, 'username', currentUserId));
+
+      let senderUsername = 'New Message';
+
+      if (senderDoc.exists()) {
+        senderUsername = senderDoc.data()?.username || 'New Message';
+      }
+
+      // Send push notification
+      await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Accept-encoding': 'gzip, deflate',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: pushToken,
+          sound: 'default',
+          title: senderUsername,
+          body: messageText,
+          data: {
+            chatId,
+            senderId: currentUserId,
           },
-          body: JSON.stringify({
-            to: pushToken,
-            sound: 'default',
-            title: 'New Message',
-            body: messageText,
-            data: {
-              chatId,
-              senderId: currentUserId,
-            },
-          }),
-        }
-      );
+        }),
+      });
+
     } catch (error) {
       console.log('Push notification error:', error);
     }
+  };
+  const [chatInfo, setChatInfo] = useState(null);
+  const [transactionExists, setTransactionExists] = useState(false);
+  useEffect(() => {
+    if (!chatId) return;
+
+    const unsubscribeChat = onSnapshot(
+      doc(db, "chats", chatId),
+      (snap) => {
+        if (snap.exists()) {
+          setChatInfo(snap.data());
+        }
+      }
+    );
+
+    const q = query(
+      collection(db, "transactions"),
+      where("chatId", "==", chatId)
+    );
+
+    const unsubscribeTransaction = onSnapshot(q, (snapshot) => {
+      const activeTransaction = snapshot.docs.find(
+        doc => doc.data().status !== "completed"
+      );
+
+      setTransactionExists(!!activeTransaction);
+    });
+
+    return () => {
+      unsubscribeChat();
+      unsubscribeTransaction();
+    };
+
+  }, [chatId]);
+  const startTransaction = async () => {
+
+    if (!chatInfo) {
+      Alert.alert("Please wait", "Loading chat information...");
+      return;
+    }
+
+    try {
+
+
+      const q = query(
+        collection(db, "transactions"),
+        where("chatId", "==", chatId)
+      );
+
+      const snap = await getDocs(q);
+
+      const activeTransaction = snap.docs.find(
+        doc => doc.data().status !== "completed"
+      );
+
+      if (activeTransaction) {
+        Alert.alert("Transaction", "A transaction already exists.");
+        return;
+      }
+
+      if (!chatInfo) {
+        Alert.alert("Please wait", "Chat is still loading.");
+        return;
+      }
+
+      if (!peerId) {
+        Alert.alert("Error", "Missing peer.");
+        return;
+      }
+
+      if (!currentUserId) {
+        Alert.alert("Error", "User not logged in.");
+        return;
+      }
+
+      // deterministic role assignment
+      let lenderId;
+      let borrowerId;
+
+      if (chatInfo.listingType === "listing") {
+        lenderId = chatInfo.ownerId;
+        borrowerId =
+          chatInfo.ownerId === currentUserId ? peerId : currentUserId;
+      } else {
+        borrowerId = chatInfo.ownerId;
+        lenderId =
+          chatInfo.ownerId === currentUserId ? peerId : currentUserId;
+      }
+
+      await addDoc(collection(db, "transactions"), {
+
+        chatId,
+
+        itemTitle,
+
+        lenderId,
+
+        borrowerId,
+
+        ownerId: chatInfo.ownerId || currentUserId,
+
+        listingType: chatInfo.listingType,
+
+        status: "pending",
+
+        otp: "",
+
+        otpCreatedAt: null,
+
+        createdAt: serverTimestamp()
+
+      });
+
+      setTransactionExists(true);
+
+      Alert.alert(
+        "Transaction Started",
+        "Continue negotiating. When you meet up, go to Verify."
+      );
+
+    } catch (err) {
+
+      console.log(err);
+
+      Alert.alert("Error", "Couldn't create transaction.");
+
+    }
+
   };
 
   const handleSendMessage = async () => {
@@ -287,6 +434,36 @@ export default function ChatScreen({ route, navigation }) {
         contentContainerStyle={styles.scrollListPadding}
         showsVerticalScrollIndicator={false}
       />
+      {!transactionExists &&
+        chatInfo &&
+        (
+          (chatInfo.listingType === "listing" &&
+            currentUserId === chatInfo.ownerId) ||
+
+          (chatInfo.listingType === "request" &&
+            currentUserId !== chatInfo.ownerId)
+        ) && (
+          <TouchableOpacity
+            style={{
+              backgroundColor: "#14004c",
+              margin: 15,
+              padding: 15,
+              borderRadius: 10,
+              alignItems: "center"
+            }}
+            onPress={startTransaction}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontWeight: "bold",
+                fontSize: 16
+              }}
+            >
+              Start Transaction
+            </Text>
+          </TouchableOpacity>
+        )}
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

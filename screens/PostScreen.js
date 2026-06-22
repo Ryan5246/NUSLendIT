@@ -15,11 +15,11 @@ import {
 
 import DateTimePicker from '@react-native-community/datetimepicker';
 
-// Firebase requirements
+
 import { db, auth } from '../firebaseConfig';
 import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
-// Helper function to format date objects cleanly into string format
+
 const formatDateString = (date) => {
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -27,7 +27,7 @@ const formatDateString = (date) => {
   return `${day}/${month}/${year}`;
 };
 
-// Requests page
+
 function RequestForm() {
   const [username, setUsername] = useState('anonymous');
 
@@ -53,12 +53,12 @@ function RequestForm() {
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Visibility toggles for picker modals
+
   const [showBorrowPicker, setShowBorrowPicker] = useState(false);
   const [showReturnPicker, setShowReturnPicker] = useState(false);
 
   const handleBorrowDateChange = (event, selectedDate) => {
-    // Android automatically closes the dialog on change event types
+
     if (Platform.OS === 'android') {
       setShowBorrowPicker(false);
     }
@@ -85,7 +85,7 @@ function RequestForm() {
 
     try {
       await addDoc(collection(db, 'requests'), {
-        userId: auth.currentUser?.uid || 'anonymous_student', // Binds the post to the student account
+        userId: auth.currentUser?.uid || 'anonymous_student',
         username: username,
         item: item,
         location: location,
@@ -99,7 +99,7 @@ function RequestForm() {
 
       Alert.alert('Success', 'Your borrow request has been posted!');
 
-      // Clear form inputs on success
+
       setItem('');
       setLocation('');
       setBorrowDate(new Date());
@@ -126,13 +126,13 @@ function RequestForm() {
       <Text style={styles.label}>Location:</Text>
       <TextInput style={styles.input} placeholder="Eg: Temasek Hall" placeholderTextColor="#a0a0a0" value={location} onChangeText={setLocation} />
 
-      {/* Borrow Date Row Trigger */}
+
       <Text style={styles.label}>Borrow Date:</Text>
       <TouchableOpacity
         style={styles.dropdownInput}
         onPress={() => {
           setShowBorrowPicker(true);
-          setShowReturnPicker(false); // Mutually close the other picker
+          setShowReturnPicker(false);
         }}
         activeOpacity={0.7}
       >
@@ -140,7 +140,7 @@ function RequestForm() {
         <Text style={styles.dropdownArrow}>▼</Text>
       </TouchableOpacity>
 
-      {/* iOS Specific Confirm Strip Bar */}
+
       {showBorrowPicker && Platform.OS === 'ios' && (
         <TouchableOpacity style={styles.pickerDoneStrip} onPress={() => setShowBorrowPicker(false)}>
           <Text style={styles.pickerDoneText}>Confirm Borrow Date</Text>
@@ -156,13 +156,13 @@ function RequestForm() {
         />
       )}
 
-      {/* Return Date Row Trigger */}
+
       <Text style={styles.label}>Return Date:</Text>
       <TouchableOpacity
         style={styles.dropdownInput}
         onPress={() => {
           setShowReturnPicker(true);
-          setShowBorrowPicker(false); // Mutually close the other picker
+          setShowBorrowPicker(false);
         }}
         activeOpacity={0.7}
       >
@@ -325,7 +325,6 @@ export default function PostScreen() {
   );
 }
 
-// Layout styling parameters
 const styles = StyleSheet.create({
   safeAreaContainer: {
     flex: 1,
