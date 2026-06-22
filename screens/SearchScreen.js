@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  TextInput, 
-  TouchableOpacity, 
-  FlatList, 
-  SafeAreaView, 
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  SafeAreaView,
   ActivityIndicator,
   RefreshControl,
   Alert
@@ -15,7 +15,7 @@ import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, getDocs, addDoc, where } from 'firebase/firestore';
 
 export default function SearchScreen({ navigation, route }) {
-  const [activeTab, setActiveTab] = useState('Request'); 
+  const [activeTab, setActiveTab] = useState('Request');
   const [searchQuery, setSearchQuery] = useState('');
   const [requests, setRequests] = useState([]);
   const [listings, setListings] = useState([]);
@@ -34,15 +34,15 @@ export default function SearchScreen({ navigation, route }) {
     if (!currentUserId) return;
 
     setLoading(true);
-    let unsubscribeRequests = () => {};
-    let unsubscribeListings = () => {};
+    let unsubscribeRequests = () => { };
+    let unsubscribeListings = () => { };
 
     // Listen for blocks (blocker OR blocked user)
     const blocksQuery = query(collection(db, 'blocks'));
-    
+
     const unsubscribeBlocks = onSnapshot(blocksQuery, (blocksSnapshot) => {
       const blockedUserIds = [];
-      
+
       blocksSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.blockerId === currentUserId) {
@@ -59,7 +59,7 @@ export default function SearchScreen({ navigation, route }) {
       const qRequests = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
       unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const peerRequests = allDocs.filter(doc => 
+        const peerRequests = allDocs.filter(doc =>
           doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId)
         );
         setRequests(peerRequests);
@@ -72,7 +72,7 @@ export default function SearchScreen({ navigation, route }) {
       const qListings = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
       unsubscribeListings = onSnapshot(qListings, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const peerListings = allDocs.filter(doc => 
+        const peerListings = allDocs.filter(doc =>
           doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId)
         );
         setListings(peerListings);
@@ -113,7 +113,7 @@ export default function SearchScreen({ navigation, route }) {
       const chatsRef = collection(db, 'chats');
       const q = query(chatsRef, where('itemId', '==', itemCard.id));
       const querySnapshot = await getDocs(q);
-      
+
       let targetChatId = null;
 
       querySnapshot.forEach((doc) => {
@@ -128,7 +128,12 @@ export default function SearchScreen({ navigation, route }) {
           itemId: itemCard.id,
           itemTitle: itemCard.item,
           participants: [currentUserId, itemOwnerId],
-          lastMessageText: 'Room created. Start negotiating handoff details!',
+
+          ownerId: itemOwnerId,
+
+          listingType: activeTab === "List" ? "listing" : "request",
+
+          lastMessageText: "Room created. Start negotiating handoff details!",
           lastMessageTimestamp: Date.now(),
         };
         const docRef = await addDoc(collection(db, 'chats'), newChatRoom);
@@ -178,7 +183,7 @@ export default function SearchScreen({ navigation, route }) {
       return (
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Need: {item.item} <Text style={{fontSize: 14, fontWeight: 'normal', color: '#8e8e93'}}>by @{item.username || 'unknown'}</Text></Text>
+            <Text style={styles.cardTitle}>Need: {item.item} <Text style={{ fontSize: 14, fontWeight: 'normal', color: '#8e8e93' }}>by @{item.username || 'unknown'}</Text></Text>
             <Text style={styles.cardPrice}>${item.willingToPay}</Text>
           </View>
           <Text style={styles.cardRow}>📍 Location: <Text style={styles.cardValue}>{item.location}</Text></Text>
@@ -195,7 +200,7 @@ export default function SearchScreen({ navigation, route }) {
       return (
         <View style={[styles.card, styles.listingCard]}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Item: {item.item} <Text style={{fontSize: 14, fontWeight: 'normal', color: '#8e8e93'}}>by @{item.username || 'unknown'}</Text></Text>
+            <Text style={styles.cardTitle}>Item: {item.item} <Text style={{ fontSize: 14, fontWeight: 'normal', color: '#8e8e93' }}>by @{item.username || 'unknown'}</Text></Text>
             <Text style={styles.cardPrice}>${item.costPerDay}/day</Text>
           </View>
           <Text style={styles.cardRow}>📍 Location: <Text style={styles.cardValue}>{item.location}</Text></Text>
@@ -224,7 +229,7 @@ export default function SearchScreen({ navigation, route }) {
       </View>
 
       <View style={styles.searchBarContainer}>
-        <TextInput 
+        <TextInput
           style={styles.searchInput}
           placeholder={activeTab === 'Request' ? "Search requests by keyword..." : "Search available items to borrow..."}
           placeholderTextColor="#a0a0a0"

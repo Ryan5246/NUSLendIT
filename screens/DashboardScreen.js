@@ -16,7 +16,7 @@ import { doc, getDoc, collection, query, orderBy, onSnapshot, getDocs, addDoc, w
 export default function DashboardScreen({ navigation }) {
   const [username, setUsername] = useState('Student');
   const [loading, setLoading] = useState(true);
-  
+
   const [peerBorrow, setPeerBorrow] = useState(null);
   const [peerLend, setPeerLend] = useState(null);
 
@@ -25,8 +25,8 @@ export default function DashboardScreen({ navigation }) {
   useEffect(() => {
     if (!currentUserId) return;
 
-    let unsubscribeBorrow = () => {};
-    let unsubscribeLend = () => {};
+    let unsubscribeBorrow = () => { };
+    let unsubscribeLend = () => { };
 
     // Fetch current user's profile handle
     const fetchUserProfile = async () => {
@@ -45,10 +45,10 @@ export default function DashboardScreen({ navigation }) {
 
     // BI-DIRECTIONAL BLOCK LISTENER: Track both blocker and blocked relationships
     const blocksQuery = query(collection(db, 'blocks'));
-    
+
     const unsubscribeBlocks = onSnapshot(blocksQuery, (blocksSnapshot) => {
       const blockedUserIds = [];
-      
+
       blocksSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.blockerId === currentUserId) {
@@ -66,10 +66,10 @@ export default function DashboardScreen({ navigation }) {
       const qBorrow = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
       unsubscribeBorrow = onSnapshot(qBorrow, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const peerRequests = allDocs.filter(doc => 
+        const peerRequests = allDocs.filter(doc =>
           doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId)
         );
-        
+
         if (peerRequests.length > 0) {
           setPeerBorrow(peerRequests[0]);
         } else {
@@ -81,10 +81,10 @@ export default function DashboardScreen({ navigation }) {
       const qLend = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
       unsubscribeLend = onSnapshot(qLend, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const peerListings = allDocs.filter(doc => 
+        const peerListings = allDocs.filter(doc =>
           doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId)
         );
-        
+
         if (peerListings.length > 0) {
           setPeerLend(peerListings[0]);
         } else {
@@ -103,7 +103,7 @@ export default function DashboardScreen({ navigation }) {
   }, [currentUserId]);
 
   // Asynchronous Interceptor to handle room validation and routing
-  const executeChatRouting = async (itemCard) => {
+  const executeChatRouting = async (itemCard, type) => {
     const itemOwnerId = itemCard.userId;
 
     if (!itemOwnerId || itemOwnerId === 'anonymous_student') {
@@ -115,7 +115,7 @@ export default function DashboardScreen({ navigation }) {
       const chatsRef = collection(db, 'chats');
       const q = query(chatsRef, where('itemId', '==', itemCard.id));
       const querySnapshot = await getDocs(q);
-      
+
       let targetChatId = null;
 
       querySnapshot.forEach((doc) => {
@@ -130,7 +130,12 @@ export default function DashboardScreen({ navigation }) {
           itemId: itemCard.id,
           itemTitle: itemCard.item,
           participants: [currentUserId, itemOwnerId],
-          lastMessageText: 'Room created. Start negotiating handoff details!',
+
+          ownerId: itemOwnerId,
+
+          listingType: type === "List" ? "listing" : "request",
+
+          lastMessageText: "Room created. Start negotiating handoff details!",
           lastMessageTimestamp: Date.now(),
         };
         const docRef = await addDoc(collection(db, 'chats'), newChatRoom);
@@ -160,7 +165,7 @@ export default function DashboardScreen({ navigation }) {
         `Would you like to offer your ${item.item} to this borrower? This will open a negotiation chat.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Chat', onPress: () => executeChatRouting(item) }
+          { text: 'Open Chat', onPress: () => executeChatRouting(item, type) }
         ]
       );
     } else {
@@ -169,7 +174,7 @@ export default function DashboardScreen({ navigation }) {
         `Would you like to request a loan for this ${item.item}? This will notify the lender.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Confirm Request', onPress: () => executeChatRouting(item) }
+          { text: 'Confirm Request', onPress: () => executeChatRouting(item, type) }
         ]
       );
     }
@@ -198,7 +203,7 @@ export default function DashboardScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+
         {/* Welcome Header */}
         <View style={styles.welcomeHeader}>
           <View>
@@ -233,9 +238,9 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.cardRow}>🏦 Security Deposit: <Text style={styles.cardValue}>${peerBorrow.deposit}</Text></Text>
               <Text style={styles.cardRow}>💬 Details: <Text style={styles.cardValue}>{peerBorrow.description}</Text></Text>
 
-              <TouchableOpacity 
-                style={styles.cardActionButton} 
-                onPress={() => handleTransactionInitiation(peerBorrow, 'Request')} 
+              <TouchableOpacity
+                style={styles.cardActionButton}
+                onPress={() => handleTransactionInitiation(peerBorrow, 'Request')}
                 activeOpacity={0.8}
               >
                 <Text style={styles.cardActionButtonText}>Offer to Lend</Text>
@@ -270,9 +275,9 @@ export default function DashboardScreen({ navigation }) {
               <Text style={styles.cardRow}>🛡️ Security Deposit: <Text style={styles.cardValue}>{peerLend.deposit}</Text></Text>
               <Text style={styles.cardRow}>💬 Requirements: <Text style={styles.cardValue}>{peerLend.returnConditions}</Text></Text>
 
-              <TouchableOpacity 
-                style={[styles.cardActionButton, styles.listingActionButton]} 
-                onPress={() => handleTransactionInitiation(peerLend, 'List')} 
+              <TouchableOpacity
+                style={[styles.cardActionButton, styles.listingActionButton]}
+                onPress={() => handleTransactionInitiation(peerLend, 'List')}
                 activeOpacity={0.8}
               >
                 <Text style={styles.cardActionButtonText}>Request to Borrow</Text>
@@ -294,10 +299,10 @@ const styles = StyleSheet.create({
   safeAreaContainer: { flex: 1, backgroundColor: '#ffffff' },
   centerSpinner: { flex: 1, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center' },
   scrollContent: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
-  welcomeHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+  welcomeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
     paddingBottom: 16,
     borderBottomWidth: 1,
@@ -305,12 +310,12 @@ const styles = StyleSheet.create({
   },
   greetingText: { fontSize: 16, color: '#8e8e93', fontWeight: '500' },
   usernameText: { fontSize: 26, fontWeight: 'bold', color: '#14004c', marginTop: 2 },
-  avatarButton: { 
-    width: 50, 
-    height: 50, 
-    borderRadius: 25, 
-    backgroundColor: '#14004c', 
-    justifyContent: 'center', 
+  avatarButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#14004c',
+    justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden'
   },
@@ -351,11 +356,11 @@ const styles = StyleSheet.create({
   },
   listingActionButton: { backgroundColor: '#2e2270' },
   cardActionButtonText: { color: '#ffffff', fontSize: 15, fontWeight: 'bold' },
-  emptyCard: { 
-    backgroundColor: '#f8f8fa', 
-    borderRadius: 16, 
-    padding: 20, 
-    alignItems: 'center', 
+  emptyCard: {
+    backgroundColor: '#f8f8fa',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#e5e5ea',
