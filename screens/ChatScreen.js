@@ -9,7 +9,9 @@ import {
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
+  ActivityIndicator,
+  Modal
 } from 'react-native';
 import { db, auth } from '../firebaseConfig';
 import {
@@ -39,24 +41,30 @@ export default function ChatScreen({ route, navigation }) {
   const [isPeerBlocked, setIsPeerBlocked] = useState(false);
   const currentUserId = auth.currentUser?.uid;
 
+  const [chatInfo, setChatInfo] = useState(null);
+  const [transactionExists, setTransactionExists] = useState(false);
+  const [activeTxId, setActiveTxId] = useState(null);
+  const [txStatus, setTxStatus] = useState(null); // Will track 'pending', 'returned', or 'completed'
+  const [checkingTransaction, setCheckingTransaction] = useState(true);
+
+  // Rating Modal States
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [selectedRating, setSelectedRating] = useState(5);
+
   const paramsRef = useRef({ chatId: null, peerId: null });
 
   useEffect(() => {
     paramsRef.current = { chatId, peerId };
-    console.log("📍 Active Chat Pointer Diagnostics -> chatId:", chatId, "| peerId:", peerId);
   }, [chatId, peerId]);
-
 
   useEffect(() => {
     if (!currentUserId || !peerId) return;
     const blockId = `${currentUserId}_${peerId}`;
     const unsubscribe = onSnapshot(doc(db, 'blocks', blockId), (docSnap) => {
-      // It is blocked if the document exists and has valid payload attributes
-      setIsPeerBlocked(docSnap.exists() && Object.keys(docSnap.data() || {}).length > 0);
+      setIsPeerBlocked(docSnap.exists());
     });
     return () => unsubscribe();
   }, [currentUserId, peerId]);
-
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -66,18 +74,15 @@ export default function ChatScreen({ route, navigation }) {
           onPress={() => {
             const activeChatId = paramsRef.current.chatId;
             const activePeerId = paramsRef.current.peerId;
-
             const options = [
               { text: "Cancel", style: "cancel" },
               { text: "Clear Chat History", style: "destructive", onPress: () => executeClearHistory(activeChatId) }
             ];
-
             if (isPeerBlocked) {
               options.push({ text: "Unblock User", onPress: () => executeUnblock(activePeerId) });
             } else {
               options.push({ text: "Block User", style: "destructive", onPress: () => executeBlockWithParams(activePeerId) });
             }
-
             Alert.alert("Chat Options", "What would you like to do?", options);
           }}
           activeOpacity={0.7}
@@ -88,94 +93,63 @@ export default function ChatScreen({ route, navigation }) {
     });
   }, [navigation, isPeerBlocked]);
 
-
   const executeClearHistory = async (targetId) => {
     if (!targetId) return;
     try {
-      const chatRef = doc(db, 'chats', targetId);
-      await updateDoc(chatRef, {
-        [`clearedTimestamps.${currentUserId}`]: Date.now()
-      });
+      await updateDoc(doc(db, 'chats', targetId), { [`clearedTimestamps.${currentUserId}`]: Date.now() });
       Alert.alert("Success", "Chat history cleared.");
     } catch (error) {
-      console.error("Error clearing history: ", error);
+      console.error(error);
     }
   };
-
 
   const executeBlockWithParams = async (targetPeerId) => {
     if (!targetPeerId || !currentUserId) return;
     try {
-      const blockId = `${currentUserId}_${targetPeerId}`;
-      await setDoc(doc(db, 'blocks', blockId), {
-        blockerId: currentUserId,
-        blockedId: targetPeerId,
-        createdAt: Date.now()
-      });
-      Alert.alert("Blocked", "User has been blocked. You will no longer see each other's marketplace feeds.");
+      await setDoc(doc(db, 'blocks', `${currentUserId}_${targetPeerId}`), { blockerId: currentUserId, blockedId: targetPeerId, createdAt: Date.now() });
+      Alert.alert("Blocked", "User has been blocked.");
     } catch (error) {
-      Alert.alert("Database Error", error.message);
+      console.error(error);
     }
   };
-
 
   const executeUnblock = async (targetPeerId) => {
     if (!targetPeerId || !currentUserId) return;
     try {
-      const blockId = `${currentUserId}_${targetPeerId}`;
-      await deleteDoc(doc(db, 'blocks', blockId));
+      await deleteDoc(doc(db, 'blocks', `${currentUserId}_${targetPeerId}`));
       Alert.alert("Success", "User has been unblocked.");
     } catch (error) {
-      Alert.alert("Error", error.message);
+      console.error(error);
     }
   };
-
 
   useEffect(() => {
     const fetchPeerHandle = async () => {
       if (!peerId) return;
-      try {
-        const peerDocRef = doc(db, 'username', peerId);
-        const docSnap = await getDoc(peerDocRef);
-        if (docSnap.exists() && docSnap.data().username) {
-          setPeerHandle(docSnap.data().username);
-        }
-      } catch (err) {
-        console.log("Error looking up peer handle: ", err);
-      }
+      const docSnap = await getDoc(doc(db, 'username', peerId));
+      if (docSnap.exists() && docSnap.data().username) setPeerHandle(docSnap.data().username);
     };
     fetchPeerHandle();
   }, [peerId]);
 
-
   useEffect(() => {
     if (!chatId) return;
-
     const chatRef = doc(db, 'chats', chatId);
     let clearThreshold = 0;
 
     const unsubscribeChat = onSnapshot(chatRef, (chatSnap) => {
-      if (chatSnap.exists()) {
-        const data = chatSnap.data();
-        clearThreshold = data.clearedTimestamps?.[currentUserId] || 0;
-      }
+      if (chatSnap.exists()) clearThreshold = chatSnap.data().clearedTimestamps?.[currentUserId] || 0;
     });
 
-    const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('createdAt', 'desc'));
-
+    const q = query(collection(db, 'chats', chatId, 'messages'), orderBy('createdAt', 'desc'));
     const unsubscribeMessages = onSnapshot(q, (snapshot) => {
-      const loadedBubbles = snapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        // Filter out bubbles created prior to local user clear commands
+      const loaded = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
         .filter(msg => {
           const msgTime = msg.createdAt?.toMillis ? msg.createdAt.toMillis() : (msg.createdAt || Date.now());
           return msgTime > clearThreshold;
         });
-      setMessages(loadedBubbles);
+      setMessages(loaded);
     });
 
     return () => {
@@ -183,224 +157,191 @@ export default function ChatScreen({ route, navigation }) {
       unsubscribeMessages();
     };
   }, [chatId, currentUserId]);
-  const sendPushNotification = async (recipientId, messageText) => {
-    try {
-      // Get recipient's push token
-      const recipientDoc = await getDoc(doc(db, 'username', recipientId));
 
-      if (!recipientDoc.exists()) return;
-
-      const pushToken = recipientDoc.data()?.expoPushToken;
-
-      if (!pushToken) return;
-
-      // Get sender's username
-      const senderDoc = await getDoc(doc(db, 'username', currentUserId));
-
-      let senderUsername = 'New Message';
-
-      if (senderDoc.exists()) {
-        senderUsername = senderDoc.data()?.username || 'New Message';
-      }
-
-      // Send push notification
-      await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          'Accept-encoding': 'gzip, deflate',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: pushToken,
-          sound: 'default',
-          title: senderUsername,
-          body: messageText,
-          data: {
-            chatId,
-            senderId: currentUserId,
-          },
-        }),
-      });
-
-    } catch (error) {
-      console.log('Push notification error:', error);
-    }
-  };
-  const [chatInfo, setChatInfo] = useState(null);
-  const [transactionExists, setTransactionExists] = useState(false);
+  // 📡 FIXED: Tracks active vs completed entries historically to prevent state reset popping
   useEffect(() => {
     if (!chatId) return;
+    const q = query(collection(db, "transactions"), where("chatId", "==", chatId));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const activeTx = snapshot.docs.find(doc => doc.data().status !== "completed");
+      const completedTx = snapshot.docs.find(doc => doc.data().status === "completed");
 
-    const unsubscribeChat = onSnapshot(
-      doc(db, "chats", chatId),
-      (snap) => {
-        if (snap.exists()) {
-          setChatInfo(snap.data());
+      if (activeTx) {
+        setTransactionExists(true);
+        setActiveTxId(activeTx.id);
+        setTxStatus(activeTx.data().status);
+      } else if (completedTx) {
+        setTransactionExists(true); // Keep locked to hide initial actions
+        setActiveTxId(completedTx.id);
+        setTxStatus("completed");
+      } else {
+        setTransactionExists(false);
+        setActiveTxId(null);
+        setTxStatus(null);
+      }
+      setCheckingTransaction(false);
+    });
+    return () => unsubscribe();
+  }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId) return;
+    const unsubscribe = onSnapshot(doc(db, "chats", chatId), (snap) => {
+      if (snap.exists()) setChatInfo(snap.data());
+    });
+    return () => unsubscribe();
+  }, [chatId]);
+
+  useEffect(() => {
+    if (txStatus === "returned") {
+      const checkRatingCollected = async () => {
+        const docSnap = await getDoc(doc(db, "transactions", activeTxId));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const hasRated = data[`hasRated_${currentUserId}`];
+          if (!hasRated) {
+            setRatingModalVisible(true);
+          }
+        }
+      };
+      checkRatingCollected();
+    }
+  }, [txStatus, activeTxId, currentUserId]);
+
+  const handleFinalizeChoice = () => {
+    Alert.alert("Finalize Partner Choice", "Lock in this transaction partner?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Confirm",
+        onPress: async () => {
+          try {
+            await updateDoc(doc(db, "chats", chatId), { status: "finalized" });
+            const source = chatInfo.listingType === "request" ? "requests" : "listings";
+            await updateDoc(doc(db, source, chatInfo.itemId), { status: "finalized" });
+          } catch (err) {
+            console.error(err);
+          }
         }
       }
-    );
+    ]);
+  };
 
-    const q = query(
-      collection(db, "transactions"),
-      where("chatId", "==", chatId)
-    );
+  const handleUndoFinalizeChoice = () => {
+    Alert.alert("Undo Finalize Choice", "Unlock selection and send your post back to public feeds?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Undo",
+        onPress: async () => {
+          try {
+            await updateDoc(doc(db, "chats", chatId), { status: "active" });
+            const source = chatInfo.listingType === "request" ? "requests" : "listings";
+            await updateDoc(doc(db, source, chatInfo.itemId), { status: "active" });
+            Alert.alert("Success", "Partner selection undone. Your post is now live again.");
+          } catch (err) {
+            console.error("Error reverting status flags:", err);
+          }
+        }
+      }
+    ]);
+  };
 
-    const unsubscribeTransaction = onSnapshot(q, (snapshot) => {
-      const activeTransaction = snapshot.docs.find(
-        doc => doc.data().status !== "completed"
-      );
-
-      setTransactionExists(!!activeTransaction);
-    });
-
-    return () => {
-      unsubscribeChat();
-      unsubscribeTransaction();
-    };
-
-  }, [chatId]);
   const startTransaction = async () => {
-
-    if (!chatInfo) {
-      Alert.alert("Please wait", "Loading chat information...");
-      return;
-    }
-
     try {
-
-
-      const q = query(
-        collection(db, "transactions"),
-        where("chatId", "==", chatId)
-      );
-
-      const snap = await getDocs(q);
-
-      const activeTransaction = snap.docs.find(
-        doc => doc.data().status !== "completed"
-      );
-
-      if (activeTransaction) {
-        Alert.alert("Transaction", "A transaction already exists.");
-        return;
-      }
-
-      if (!chatInfo) {
-        Alert.alert("Please wait", "Chat is still loading.");
-        return;
-      }
-
-      if (!peerId) {
-        Alert.alert("Error", "Missing peer.");
-        return;
-      }
-
-      if (!currentUserId) {
-        Alert.alert("Error", "User not logged in.");
-        return;
-      }
-
-      // deterministic role assignment
-      let lenderId;
-      let borrowerId;
-
+      let lenderId, borrowerId;
       if (chatInfo.listingType === "listing") {
         lenderId = chatInfo.ownerId;
-        borrowerId =
-          chatInfo.ownerId === currentUserId ? peerId : currentUserId;
+        borrowerId = chatInfo.ownerId === currentUserId ? peerId : currentUserId;
       } else {
         borrowerId = chatInfo.ownerId;
-        lenderId =
-          chatInfo.ownerId === currentUserId ? peerId : currentUserId;
+        lenderId = chatInfo.ownerId === currentUserId ? peerId : currentUserId;
       }
 
       await addDoc(collection(db, "transactions"), {
-
         chatId,
-
         itemTitle,
-
         lenderId,
-
         borrowerId,
-
         ownerId: chatInfo.ownerId || currentUserId,
-
-        listingType: chatInfo.listingType,
-
+        listingType: chatInfo.listingType || "listing",
         status: "pending",
-
-        otp: "",
-
-        otpCreatedAt: null,
-
         createdAt: serverTimestamp()
-
       });
-
-      setTransactionExists(true);
-
-      Alert.alert(
-        "Transaction Started",
-        "Continue negotiating. When you meet up, go to Verify."
-      );
-
+      Alert.alert("Transaction Started", "Handoff sequence initiated.");
     } catch (err) {
-
-      console.log(err);
-
-      Alert.alert("Error", "Couldn't create transaction.");
-
+      console.error(err);
     }
+  };
 
+  const handleProcessUserRating = async () => {
+    try {
+      const txRef = doc(db, "transactions", activeTxId);
+      const peerDocRef = doc(db, "username", peerId);
+      const peerSnap = await getDoc(peerDocRef);
+
+      if (peerSnap.exists()) {
+        const peerData = peerSnap.data();
+        const currentSum = peerData.ratingSum || 0;
+        const currentCount = peerData.ratingCount || 0;
+
+        const newSum = currentSum + selectedRating;
+        const newCount = currentCount + 1;
+        const newAvg = newSum / newCount;
+
+        await updateDoc(peerDocRef, {
+          ratingSum: newSum,
+          ratingCount: newCount,
+          averageRating: newAvg
+        });
+      }
+
+      await updateDoc(txRef, { [`hasRated_${currentUserId}`]: true });
+
+      const freshTxSnap = await getDoc(txRef);
+      if (freshTxSnap.exists()) {
+        const freshData = freshTxSnap.data();
+        if (freshData[`hasRated_${currentUserId}`] && freshData[`hasRated_${peerId}`]) {
+          await updateDoc(txRef, { status: "completed" });
+        }
+      }
+
+      setRatingModalVisible(false);
+      Alert.alert("Thank you", "Your review has been securely saved.");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleReturnProductAsset = () => {
+    Alert.alert("Confirm Return", "Are you sure you have successfully handed back this item?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Returned",
+        onPress: async () => {
+          try {
+            await updateDoc(doc(db, "transactions", activeTxId), { status: "returned" });
+            Alert.alert("Returned Registered", "Please submit your counterparty score card.");
+          } catch (err) {
+            console.error(err);
+          }
+        }
+      }
+    ]);
   };
 
   const handleSendMessage = async () => {
     const cleanMsg = inputText.trim();
     if (!cleanMsg || !chatId || !peerId) return;
-
     try {
-      const blockCheckId1 = `${currentUserId}_${peerId}`;
-      const blockCheckId2 = `${peerId}_${currentUserId}`;
-
-      const snap1 = await getDoc(doc(db, 'blocks', blockCheckId1));
-      const snap2 = await getDoc(doc(db, 'blocks', blockCheckId2));
-
-      if ((snap1.exists() && Object.keys(snap1.data() || {}).length > 0) ||
-        (snap2.exists() && Object.keys(snap2.data() || {}).length > 0)) {
-        Alert.alert("Action Blocked", "You cannot exchange messages with this student channel.");
-        return;
-      }
-
       setInputText('');
-      const messagesRef = collection(db, 'chats', chatId, 'messages');
-      await addDoc(messagesRef, {
-        senderId: currentUserId,
-        text: cleanMsg,
-        createdAt: serverTimestamp(),
-      });
-
-      const chatRoomDocRef = doc(db, 'chats', chatId);
-
-      await updateDoc(chatRoomDocRef, {
-        lastMessageText: cleanMsg,
-        lastMessageTimestamp: Date.now(),
-      });
-
-      await sendPushNotification(
-        peerId,
-        cleanMsg
-      );
-
+      await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId: currentUserId, text: cleanMsg, createdAt: serverTimestamp() });
+      await updateDoc(doc(db, 'chats', chatId), { lastMessageText: cleanMsg, lastMessageTimestamp: Date.now() });
     } catch (error) {
-      console.error("Message write error: ", error);
+      console.error(error);
     }
   };
 
   const renderMessageBubble = ({ item }) => {
     const isSenderMe = item.senderId === currentUserId;
-
     return (
       <View style={[styles.rowContainer, isSenderMe ? styles.myRow : styles.theirRow]}>
         <View style={[styles.bubbleBlock, isSenderMe ? styles.myBubble : styles.theirBubble]}>
@@ -410,83 +351,94 @@ export default function ChatScreen({ route, navigation }) {
     );
   };
 
-  if (!chatId) {
-    return (
-      <SafeAreaView style={styles.center}>
-        <Text style={styles.fallbackText}>Select a discussion room thread from your Inbox tab to view context.</Text>
-      </SafeAreaView>
-    );
-  }
+  const isPostOwner = chatInfo && currentUserId === chatInfo.ownerId;
+  const isLender = chatInfo && (
+    (chatInfo.listingType === "listing" && currentUserId === chatInfo.ownerId) ||
+    (chatInfo.listingType === "request" && currentUserId !== chatInfo.ownerId)
+  );
+  const isBorrower = chatInfo && (
+    (chatInfo.listingType === "request" && currentUserId === chatInfo.ownerId) ||
+    (chatInfo.listingType === "listing" && currentUserId !== chatInfo.ownerId)
+  );
 
   return (
     <SafeAreaView style={styles.safeContainer}>
+      <Modal visible={ratingModalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rate Your Experience</Text>
+            <Text style={styles.modalSubtitle}>Please grade your transaction experience with @{peerHandle}:</Text>
+            <View style={styles.starRow}>
+              {[1, 2, 3, 4, 5].map((num) => (
+                <TouchableOpacity key={num} onPress={() => setSelectedRating(num)}>
+                  <Text style={[styles.starItem, selectedRating >= num ? { color: '#ffb300' } : { color: '#e5e5ea' }]}>★</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity style={styles.submitReviewBtn} onPress={handleProcessUserRating}>
+              <Text style={styles.submitReviewBtnText}>Submit Rating</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.contextInfoBar}>
-        <Text style={styles.contextInfoText}>
-          📦 Regarding: <Text style={styles.contextItemBold}>{itemTitle}</Text>
-        </Text>
+        <Text style={styles.contextInfoText}>📦 Regarding: <Text style={styles.contextItemBold}>{itemTitle}</Text></Text>
       </View>
 
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessageBubble}
-        inverted={true}
-        contentContainerStyle={styles.scrollListPadding}
-        showsVerticalScrollIndicator={false}
-      />
-      {!transactionExists &&
-        chatInfo &&
-        (
-          (chatInfo.listingType === "listing" &&
-            currentUserId === chatInfo.ownerId) ||
+      <FlatList data={messages} keyExtractor={(item) => item.id} renderItem={renderMessageBubble} inverted={true} contentContainerStyle={styles.scrollListPadding} showsVerticalScrollIndicator={false} />
 
-          (chatInfo.listingType === "request" &&
-            currentUserId !== chatInfo.ownerId)
-        ) && (
-          <TouchableOpacity
-            style={{
-              backgroundColor: "#14004c",
-              margin: 15,
-              padding: 15,
-              borderRadius: 10,
-              alignItems: "center"
-            }}
-            onPress={startTransaction}
-          >
-            <Text
-              style={{
-                color: "white",
-                fontWeight: "bold",
-                fontSize: 16
-              }}
-            >
-              Start Transaction
-            </Text>
-          </TouchableOpacity>
-        )}
+      {(!chatInfo || checkingTransaction) ? (
+        <View style={{ height: 74, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="small" color="#14004c" /></View>
+      ) : (
+        <>
+          {/* Finalize Button Conditions */}
+          {!transactionExists && isPostOwner && txStatus !== "completed" && (
+            chatInfo.status !== "finalized" ? (
+              <TouchableOpacity style={styles.finalizeBtn} onPress={handleFinalizeChoice} activeOpacity={0.8}>
+                <Text style={styles.finalizeBtnText}>🎯 Finalize Partner Choice</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.undoFinalizeBtn} onPress={handleUndoFinalizeChoice} activeOpacity={0.8}>
+                <Text style={styles.undoFinalizeBtnText}>↩️ Undo Finalize Choice</Text>
+              </TouchableOpacity>
+            )
+          )}
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
+          {/* Start Transaction Button Conditions */}
+          {!transactionExists && isLender && chatInfo.status === "finalized" && txStatus !== "completed" && (
+            <TouchableOpacity style={styles.transactionBtn} onPress={startTransaction} activeOpacity={0.8}>
+              <Text style={styles.transactionBtnText}>Start Transaction</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Return Action Button Conditions */}
+          {txStatus === "pending" && isBorrower && (
+            <TouchableOpacity style={styles.returnBtn} onPress={handleReturnProductAsset} activeOpacity={0.8}>
+              <Text style={styles.returnBtnText}>🔄 Confirm Item Return</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Review Awaiting HUD Notification banner */}
+          {txStatus === "returned" && (
+            <View style={styles.waitingBanner}>
+              <Text style={styles.waitingBannerText}>Awaiting Peer Reviews Submission...</Text>
+            </View>
+          )}
+
+          {/* Deal Completed Banner */}
+          {txStatus === "completed" && (
+            <View style={styles.completedBanner}>
+              <Text style={styles.completedBannerText}>✅ Deal Completed & Reviewed Successfully</Text>
+            </View>
+          )}
+        </>
+      )}
+
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <View style={styles.inputActionRow}>
-          <TextInput
-            style={[styles.textInputBox, isPeerBlocked && { backgroundColor: '#f0f0f5', color: '#8e8e93' }]}
-            placeholder={isPeerBlocked ? "You have blocked this user" : "Suggest a meeting hub or timeline..."}
-            placeholderTextColor="#a0a0a0"
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            editable={!isPeerBlocked}
-          />
-          <TouchableOpacity
-            style={[styles.dispatchButton, isPeerBlocked && { backgroundColor: '#cccccc' }]}
-            onPress={handleSendMessage}
-            disabled={isPeerBlocked}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.dispatchButtonText}>Send</Text>
-          </TouchableOpacity>
+          <TextInput style={styles.textInputBox} placeholder="Suggest a meeting hub..." placeholderTextColor="#a0a0a0" value={inputText} onChangeText={setInputText} multiline />
+          <TouchableOpacity style={styles.dispatchButton} onPress={handleSendMessage} activeOpacity={0.8}><Text style={styles.dispatchButtonText}>Send</Text></TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -495,18 +447,7 @@ export default function ChatScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   safeContainer: { flex: 1, backgroundColor: '#ffffff' },
-  center: { flex: 1, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  fallbackText: { color: '#8e8e93', fontSize: 15, textAlign: 'center' },
-  headerMenuButton: { paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center' },
-  headerMenuText: { color: '#ffffff', fontSize: 22, fontWeight: 'bold' },
-  contextInfoBar: {
-    backgroundColor: '#f0f0f5',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5ea',
-    alignItems: 'center'
-  },
+  contextInfoBar: { backgroundColor: '#f0f0f5', paddingVertical: 10, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#e5e5ea', alignItems: 'center' },
   contextInfoText: { fontSize: 13, color: '#636366' },
   contextItemBold: { fontWeight: 'bold', color: '#14004c' },
   scrollListPadding: { paddingHorizontal: 16, paddingVertical: 16 },
@@ -518,27 +459,30 @@ const styles = StyleSheet.create({
   myBubbleText: { color: '#ffffff', fontSize: 16, lineHeight: 22 },
   theirBubble: { backgroundColor: '#f0f0f5', borderBottomLeftRadius: 4 },
   theirBubbleText: { color: '#14004c', fontSize: 16, lineHeight: 22 },
-  inputActionRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e5ea'
-  },
-  textInputBox: {
-    flex: 1,
-    backgroundColor: '#fafafa',
-    color: '#222222',
-    borderRadius: 22,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    fontSize: 16,
-    maxHeight: 90,
-    borderWidth: 1.5,
-    borderColor: '#e0e0e0'
-  },
+  finalizeBtn: { backgroundColor: "#2e2270", marginHorizontal: 15, marginTop: 15, padding: 15, borderRadius: 10, alignItems: "center" },
+  finalizeBtnText: { color: "white", fontWeight: "bold", fontSize: 16 },
+  undoFinalizeBtn: { backgroundColor: "#ffffff", marginHorizontal: 15, marginTop: 15, padding: 15, borderRadius: 10, alignItems: "center", borderWidth: 2, borderColor: "#2e2270" },
+  undoFinalizeBtnText: { color: "#2e2270", fontWeight: "bold", fontSize: 16 },
+  transactionBtn: { backgroundColor: "#14004c", margin: 15, padding: 15, borderRadius: 10, alignItems: "center" },
+  transactionBtnText: { color: "white", fontWeight: "bold", fontSize: 16 },
+  returnBtn: { backgroundColor: "#00875a", margin: 15, padding: 15, borderRadius: 10, alignItems: "center" },
+  returnBtnText: { color: "white", fontWeight: "bold", fontSize: 16 },
+  waitingBanner: { backgroundColor: "#fff9e6", margin: 15, padding: 14, borderRadius: 10, alignItems: "center", borderWidth: 1, borderColor: "#ffb30050" },
+  waitingBannerText: { color: "#b78103", fontWeight: "700" },
+  completedBanner: { backgroundColor: "#f2f2f7", margin: 15, padding: 14, borderRadius: 10, alignItems: "center" },
+  completedBannerText: { color: "#00875a", fontWeight: "700", fontSize: 15 },
+  inputActionRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#e5e5ea' },
+  textInputBox: { flex: 1, backgroundColor: '#fafafa', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, maxHeight: 90, borderWidth: 1.5, borderColor: '#e0e0e0' },
   dispatchButton: { marginLeft: 14, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#14004c', borderRadius: 20 },
-  dispatchButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 }
+  dispatchButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
+  headerMenuButton: { paddingHorizontal: 16 },
+  headerMenuText: { color: '#ffffff', fontSize: 22, fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: 'white', width: '85%', borderRadius: 20, padding: 24, alignItems: 'center' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#14004c', marginBottom: 10 },
+  modalSubtitle: { fontSize: 14, color: '#636366', textAlign: 'center', marginBottom: 20 },
+  starRow: { flexDirection: 'row', marginBottom: 24 },
+  starItem: { fontSize: 42, marginHorizontal: 6 },
+  submitReviewBtn: { backgroundColor: '#14004c', width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  submitReviewBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' }
 });

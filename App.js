@@ -3,7 +3,6 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 
-
 // Firebase core app setups
 import { auth } from './firebaseConfig';
 import { initializeApp, getApps } from 'firebase/app';
@@ -14,9 +13,9 @@ import { HomeScreen, LoginScreen, SignUpScreen } from './screens/HomeScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import SetUsernameScreen from './screens/SetUsernameScreen';
 import PostOTPScreen from './screens/PostOTPScreen';
+import ProfileActivityScreen from './screens/ProfileActivityScreen'; 
 
 import TabNavigator from './TabNavigator';
-
 
 const Stack = createStackNavigator();
 
@@ -25,23 +24,22 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
 
-        <Stack.Screen name="Home" component={HomeScreen} />
-
-        <Stack.Screen
-          name="Login"
-          component={LoginScreen}
-          initialParams={{ auth: auth }}
-        />
-
-        <Stack.Screen
-          name="SignUp"
-          component={SignUpScreen}
-          initialParams={{ auth: auth }}
-        />
-
+        <Stack.Screen name="Welcome" component={HomeScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} initialParams={{ auth: auth }} />
+        <Stack.Screen name="SignUp" component={SignUpScreen} initialParams={{ auth: auth }} />
         <Stack.Screen name="SetUsername" component={SetUsernameScreen} />
         <Stack.Screen name="MainTabs" component={TabNavigator} />
         <Stack.Screen name="PostOTP" component={PostOTPScreen} />
+        <Stack.Screen 
+          name="ProfileActivity" 
+          component={ProfileActivityScreen} 
+          options={{
+            headerShown: true,
+            headerStyle: { backgroundColor: '#14004c' },
+            headerTitleStyle: { color: '#ffffff', fontWeight: 'bold' },
+            headerTintColor: '#ffffff',
+          }}
+        />
 
       </Stack.Navigator>
     </NavigationContainer>
