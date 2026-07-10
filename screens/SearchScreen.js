@@ -12,7 +12,38 @@ import {
   Alert
 } from 'react-native';
 import { db, auth } from '../firebaseConfig';
-import { collection, query, orderBy, onSnapshot, getDocs, addDoc, where } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, getDocs, addDoc, doc, getDoc, where } from 'firebase/firestore';
+import { getCampusLocationLabel } from './PostScreen'; 
+
+// Sub-component to fetch and cache user ratings reactively per post card
+function UserRatingBadge({ userId }) {
+  const [ratingInfo, setRatingInfo] = useState({ avg: 0, count: 0 });
+
+  useEffect(() => {
+    if (!userId) return;
+    const fetchRating = async () => {
+      try {
+        const userDoc = await getDoc(doc(db, 'username', userId));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setRatingInfo({
+            avg: data.averageRating ? data.averageRating.toFixed(1) : 'New',
+            count: data.ratingCount || 0
+          });
+        }
+      } catch (err) {
+        console.log("Error fetching badge stats:", err);
+      }
+    };
+    fetchRating();
+  }, [userId]);
+
+  return (
+    <Text style={styles.ratingBadgeText}>
+      ⭐ {ratingInfo.avg} {ratingInfo.count > 0 ? `(${ratingInfo.count})` : ''}
+    </Text>
+  );
+}
 
 export default function SearchScreen({ navigation, route }) {
   const [activeTab, setActiveTab] = useState('Request');
@@ -37,7 +68,6 @@ export default function SearchScreen({ navigation, route }) {
     let unsubscribeRequests = () => { };
     let unsubscribeListings = () => { };
 
-    // Listen for blocks (blocker OR blocked user)
     const blocksQuery = query(collection(db, 'blocks'));
 
     const unsubscribeBlocks = onSnapshot(blocksQuery, (blocksSnapshot) => {
@@ -55,12 +85,14 @@ export default function SearchScreen({ navigation, route }) {
       unsubscribeRequests();
       unsubscribeListings();
 
-      // Stream Requests Feed
       const qRequests = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
       unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const peerRequests = allDocs.filter(doc =>
-          doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId)
+          doc.userId !== currentUserId && 
+          !blockedUserIds.includes(doc.userId) &&
+          doc.status !== "finalized" &&
+          doc.isDeleted !== true
         );
         setRequests(peerRequests);
         if (activeTab === 'Request') setLoading(false);
@@ -68,12 +100,11 @@ export default function SearchScreen({ navigation, route }) {
         console.error("Firestore Requests Fetch Error: ", error);
       });
 
-      // Stream Listings Feed
       const qListings = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
       unsubscribeListings = onSnapshot(qListings, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const peerListings = allDocs.filter(doc =>
-          doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId)
+          doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId) && doc.isDeleted !== true
         );
         setListings(peerListings);
         if (activeTab === 'List') setLoading(false);
@@ -96,7 +127,8 @@ export default function SearchScreen({ navigation, route }) {
   const filteredData = currentData.filter(itemData => {
     const itemTitle = itemData.item ? itemData.item.toLowerCase() : '';
     const itemDesc = itemData.description || itemData.returnConditions || '';
-    const combinedText = `${itemTitle} ${itemDesc.toLowerCase()}`;
+    const locationString = getCampusLocationLabel(itemData.location).toLowerCase();
+    const combinedText = `${itemTitle} ${itemDesc.toLowerCase()} ${locationString}`;
     return combinedText.includes(searchQuery.toLowerCase());
   });
 
@@ -128,11 +160,8 @@ export default function SearchScreen({ navigation, route }) {
           itemId: itemCard.id,
           itemTitle: itemCard.item,
           participants: [currentUserId, itemOwnerId],
-
           ownerId: itemOwnerId,
-
           listingType: activeTab === "List" ? "listing" : "request",
-
           lastMessageText: "Room created. Start negotiating handoff details!",
           lastMessageTimestamp: Date.now(),
         };
@@ -147,7 +176,8 @@ export default function SearchScreen({ navigation, route }) {
           itemTitle: itemCard.item,
           peerId: itemOwnerId,
           peerUsername: itemCard.username || 'unknown'
-        }
+        },
+        initial: false 
       });
 
     } catch (error) {
@@ -179,14 +209,22 @@ export default function SearchScreen({ navigation, route }) {
   };
 
   const renderItemCard = ({ item }) => {
+    const friendlyLocation = getCampusLocationLabel(item.location);
+
     if (activeTab === 'Request') {
       return (
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Need: {item.item} <Text style={{ fontSize: 14, fontWeight: 'normal', color: '#8e8e93' }}>by @{item.username || 'unknown'}</Text></Text>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={styles.cardTitle}>Need: {item.item}</Text>
+              <View style={styles.authorMetaRow}>
+                <Text style={styles.authorHandleText}>@{item.username || 'unknown'}</Text>
+                <UserRatingBadge userId={item.userId} />
+              </View>
+            </View>
             <Text style={styles.cardPrice}>${item.willingToPay}</Text>
           </View>
-          <Text style={styles.cardRow}>📍 Location: <Text style={styles.cardValue}>{item.location}</Text></Text>
+          <Text style={styles.cardRow}>📍 Location: <Text style={styles.cardValue}>{friendlyLocation}</Text></Text>
           <Text style={styles.cardRow}>📅 Timeline: <Text style={styles.cardValue}>{item.borrowdate} to {item.returndate}</Text></Text>
           <Text style={styles.cardRow}>🏦 Security Deposit: <Text style={styles.cardValue}>${item.deposit}</Text></Text>
           <Text style={styles.cardRow}>💬 Details: <Text style={styles.cardValue}>{item.description}</Text></Text>
@@ -200,10 +238,16 @@ export default function SearchScreen({ navigation, route }) {
       return (
         <View style={[styles.card, styles.listingCard]}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Item: {item.item} <Text style={{ fontSize: 14, fontWeight: 'normal', color: '#8e8e93' }}>by @{item.username || 'unknown'}</Text></Text>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={styles.cardTitle}>Item: {item.item}</Text>
+              <View style={styles.authorMetaRow}>
+                <Text style={styles.authorHandleText}>@{item.username || 'unknown'}</Text>
+                <UserRatingBadge userId={item.userId} />
+              </View>
+            </View>
             <Text style={styles.cardPrice}>${item.costPerDay}/day</Text>
           </View>
-          <Text style={styles.cardRow}>📍 Location: <Text style={styles.cardValue}>{item.location}</Text></Text>
+          <Text style={styles.cardRow}>📍 Location: <Text style={styles.cardValue}>{friendlyLocation}</Text></Text>
           <Text style={styles.cardRow}>🛡️ Security Deposit: <Text style={styles.cardValue}>{item.deposit}</Text></Text>
           <Text style={styles.cardRow}>💬 Requirements: <Text style={styles.cardValue}>{item.returnConditions}</Text></Text>
 
@@ -231,7 +275,7 @@ export default function SearchScreen({ navigation, route }) {
       <View style={styles.searchBarContainer}>
         <TextInput
           style={styles.searchInput}
-          placeholder={activeTab === 'Request' ? "Search requests by keyword..." : "Search available items to borrow..."}
+          placeholder={activeTab === 'Request' ? "Search requests by keyword or place..." : "Search available items by hub..."}
           placeholderTextColor="#a0a0a0"
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -278,7 +322,7 @@ const styles = StyleSheet.create({
   card: { width: '100%', backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e5e5ea', borderRadius: 20, padding: 18, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   listingCard: { borderColor: '#2e227025' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle: { fontSize: 19, fontWeight: 'bold', color: '#14004c', flex: 1, paddingRight: 10 },
+  cardTitle: { fontSize: 19, fontWeight: 'bold', color: '#14004c' },
   cardPrice: { fontSize: 19, fontWeight: 'bold', color: '#14004c' },
   cardRow: { fontSize: 14, fontWeight: '700', color: '#555555', marginBottom: 6, lineHeight: 20 },
   cardValue: { fontWeight: '500', color: '#222222' },
@@ -290,4 +334,9 @@ const styles = StyleSheet.create({
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60 },
   emptyText: { fontSize: 18, fontWeight: 'bold', color: '#444444', marginBottom: 6 },
   emptySubtext: { fontSize: 14, color: '#8e8e93', textAlign: 'center' },
+  
+  // 🌟 Rating Custom Badge Styles
+  authorMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  authorHandleText: { fontSize: 14, color: '#8e8e93', marginRight: 8, fontWeight: '500' },
+  ratingBadgeText: { fontSize: 13, fontWeight: '700', color: '#ffb300', backgroundColor: '#fff9e6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' }
 });
