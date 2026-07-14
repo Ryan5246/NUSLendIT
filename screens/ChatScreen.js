@@ -44,12 +44,19 @@ export default function ChatScreen({ route, navigation }) {
   const [chatInfo, setChatInfo] = useState(null);
   const [transactionExists, setTransactionExists] = useState(false);
   const [activeTxId, setActiveTxId] = useState(null);
-  const [txStatus, setTxStatus] = useState(null); // Will track 'pending', 'returned', or 'completed'
+  const [txStatus, setTxStatus] = useState(null);
   const [checkingTransaction, setCheckingTransaction] = useState(true);
 
-  // Rating Modal States
+
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [selectedRating, setSelectedRating] = useState(5);
+
+
+  const [otpVerifyModalVisible, setOtpVerifyModalVisible] = useState(false);
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [expectedOtp, setExpectedOtp] = useState('');
+  const [otpTimestamp, setOtpTimestamp] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(180);
 
   const paramsRef = useRef({ chatId: null, peerId: null });
 
@@ -158,7 +165,7 @@ export default function ChatScreen({ route, navigation }) {
     };
   }, [chatId, currentUserId]);
 
-  // 📡 FIXED: Tracks active vs completed entries historically to prevent state reset popping
+
   useEffect(() => {
     if (!chatId) return;
     const q = query(collection(db, "transactions"), where("chatId", "==", chatId));
@@ -167,22 +174,75 @@ export default function ChatScreen({ route, navigation }) {
       const completedTx = snapshot.docs.find(doc => doc.data().status === "completed");
 
       if (activeTx) {
+        const txData = activeTx.data();
         setTransactionExists(true);
         setActiveTxId(activeTx.id);
-        setTxStatus(activeTx.data().status);
+        setTxStatus(txData.status);
+        setExpectedOtp(txData.otp || '');
+        setOtpTimestamp(txData.otpCreatedAt || null);
+
+
+        if (txData.status === "verifying" && isBorrower) {
+          setOtpVerifyModalVisible(true);
+        } else if (txData.status === "returning" && isLender) {
+          setOtpVerifyModalVisible(true);
+        } else {
+          setOtpVerifyModalVisible(false);
+        }
       } else if (completedTx) {
-        setTransactionExists(true); // Keep locked to hide initial actions
+        setTransactionExists(true);
         setActiveTxId(completedTx.id);
         setTxStatus("completed");
+        setOtpVerifyModalVisible(false);
+        setOtpTimestamp(null);
       } else {
         setTransactionExists(false);
         setActiveTxId(null);
         setTxStatus(null);
+        setOtpVerifyModalVisible(false);
+        setOtpTimestamp(null);
       }
       setCheckingTransaction(false);
     });
     return () => unsubscribe();
-  }, [chatId]);
+  }, [chatId, chatInfo]);
+
+
+  useEffect(() => {
+    if (!otpTimestamp || !activeTxId || (txStatus !== "verifying" && txStatus !== "returning")) return;
+
+    const trackingInterval = setInterval(async () => {
+      const timePassedMs = Date.now() - otpTimestamp;
+      const remainingSecs = Math.max(0, Math.floor((180000 - timePassedMs) / 1000));
+      setTimeLeft(remainingSecs);
+
+      if (remainingSecs <= 0) {
+        clearInterval(trackingInterval);
+        setOtpVerifyModalVisible(false);
+        setEnteredOtp('');
+
+        try {
+          if (txStatus === "verifying") {
+
+            await deleteDoc(doc(db, "transactions", activeTxId));
+            Alert.alert("Token Expired", "The 3-minute validation limit has passed. Please re-generate a new code.");
+          } else if (txStatus === "returning") {
+
+            await updateDoc(doc(db, "transactions", activeTxId), {
+              status: "pending",
+              otp: "",
+              otpCreatedAt: null
+            });
+            Alert.alert("Return Token Expired", "The return token expired. Please ask the borrower to generate a fresh return code.");
+          }
+        } catch (err) {
+          console.error("Error breaking expired cycle: ", err);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(trackingInterval);
+  }, [otpTimestamp, activeTxId, txStatus]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -198,8 +258,7 @@ export default function ChatScreen({ route, navigation }) {
         const docSnap = await getDoc(doc(db, "transactions", activeTxId));
         if (docSnap.exists()) {
           const data = docSnap.data();
-          const hasRated = data[`hasRated_${currentUserId}`];
-          if (!hasRated) {
+          if (!data[`hasRated_${currentUserId}`]) {
             setRatingModalVisible(true);
           }
         }
@@ -247,14 +306,53 @@ export default function ChatScreen({ route, navigation }) {
 
   const startTransaction = async () => {
     try {
-      let lenderId, borrowerId;
+      let lenderId;
+      let borrowerId;
+
       if (chatInfo.listingType === "listing") {
         lenderId = chatInfo.ownerId;
-        borrowerId = chatInfo.ownerId === currentUserId ? peerId : currentUserId;
+        borrowerId =
+          chatInfo.ownerId === currentUserId
+            ? peerId
+            : currentUserId;
       } else {
         borrowerId = chatInfo.ownerId;
-        lenderId = chatInfo.ownerId === currentUserId ? peerId : currentUserId;
+        lenderId =
+          chatInfo.ownerId === currentUserId
+            ? peerId
+            : currentUserId;
       }
+
+      const sourceCollection =
+        chatInfo.listingType === "request"
+          ? "requests"
+          : "listings";
+
+      const postSnapshot = await getDoc(
+        doc(db, sourceCollection, chatInfo.itemId)
+      );
+
+      if (!postSnapshot.exists()) {
+        Alert.alert(
+          "Error",
+          "The original post could not be found."
+        );
+        return;
+      }
+
+      const postData = postSnapshot.data();
+
+      if (!postData.returnDateTimestamp) {
+        Alert.alert(
+          "Return Date Missing",
+          "This post does not have a valid return date."
+        );
+        return;
+      }
+
+      const securityPinCode = Math.floor(
+        100000 + Math.random() * 900000
+      ).toString();
 
       await addDoc(collection(db, "transactions"), {
         chatId,
@@ -263,12 +361,62 @@ export default function ChatScreen({ route, navigation }) {
         borrowerId,
         ownerId: chatInfo.ownerId || currentUserId,
         listingType: chatInfo.listingType || "listing",
-        status: "pending",
+
+        returnDateTimestamp: postData.returnDateTimestamp,
+
+        status: "verifying",
+        otp: securityPinCode,
+        otpCreatedAt: Date.now(),
         createdAt: serverTimestamp()
       });
-      Alert.alert("Transaction Started", "Handoff sequence initiated.");
+
+      Alert.alert(
+        "🔑 Handoff Token Generated",
+        `Give this verification code to the borrower when you meet up: ${securityPinCode}\n\nValid for 3 minutes.`,
+        [{ text: "OK" }]
+      );
     } catch (err) {
-      console.error(err);
+      console.error("Start transaction error:", err);
+
+      Alert.alert(
+        "Error",
+        "Could not start the transaction."
+      );
+    }
+  };
+
+  const handleVerifyOtpToken = async () => {
+
+    if (Date.now() - otpTimestamp > 180000) {
+      return Alert.alert("Expired", "This code has run out of time. Please generate a new one.");
+    }
+
+    if (enteredOtp.trim() === expectedOtp) {
+      try {
+        if (txStatus === "verifying") {
+          await updateDoc(doc(db, "transactions", activeTxId), {
+            status: "pending",
+            otp: "",
+            otpCreatedAt: null
+          });
+          setOtpVerifyModalVisible(false);
+          setEnteredOtp('');
+          Alert.alert("Success", "Handoff verified! The item is now out on loan.");
+        } else if (txStatus === "returning") {
+          await updateDoc(doc(db, "transactions", activeTxId), {
+            status: "returned",
+            otp: "",
+            otpCreatedAt: null
+          });
+          setOtpVerifyModalVisible(false);
+          setEnteredOtp('');
+          Alert.alert("Success", "Item return verified! Please rate your experience.");
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      Alert.alert("Invalid Code", "The token you entered does not match the generated secure signature.");
     }
   };
 
@@ -312,14 +460,24 @@ export default function ChatScreen({ route, navigation }) {
   };
 
   const handleReturnProductAsset = () => {
-    Alert.alert("Confirm Return", "Are you sure you have successfully handed back this item?", [
+    Alert.alert("Initiate Return", "Are you ready to return this item and generate a verification code?", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Yes, Returned",
+        text: "Generate Return Code",
         onPress: async () => {
           try {
-            await updateDoc(doc(db, "transactions", activeTxId), { status: "returned" });
-            Alert.alert("Returned Registered", "Please submit your counterparty score card.");
+            const returnPinCode = Math.floor(100000 + Math.random() * 900000).toString();
+            await updateDoc(doc(db, "transactions", activeTxId), {
+              status: "returning",
+              otp: returnPinCode,
+              otpCreatedAt: Date.now()
+            });
+
+            Alert.alert(
+              "🔑 Return Token Generated",
+              `Show this verification code to the lender so they can confirm the return: ${returnPinCode}\n\nValid for 3 minutes.`,
+              [{ text: "OK" }]
+            );
           } catch (err) {
             console.error(err);
           }
@@ -363,6 +521,41 @@ export default function ChatScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safeContainer}>
+
+      { }
+      <Modal visible={otpVerifyModalVisible} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>🔐 Verify Exchange</Text>
+            <Text style={styles.modalSubtitle}>
+              {txStatus === "verifying"
+                ? "Please input the 6-digit verification code generated on the lender's device screen:"
+                : "Please input the 6-digit verification code generated on the borrower's device screen:"}
+            </Text>
+
+            <TextInput
+              style={styles.otpInputBox}
+              placeholder="000000"
+              placeholderTextColor="#a0a0a0"
+              keyboardType="number-pad"
+              maxLength={6}
+              value={enteredOtp}
+              onChangeText={setEnteredOtp}
+              textAlign="center"
+            />
+
+            <Text style={[styles.timerCountdownText, timeLeft < 30 && { color: '#ff3b30' }]}>
+              ⏳ Code expires in: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+            </Text>
+
+            <TouchableOpacity style={styles.submitReviewBtn} onPress={handleVerifyOtpToken}>
+              <Text style={styles.submitReviewBtnText}>Confirm Code</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      { }
       <Modal visible={ratingModalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -392,8 +585,8 @@ export default function ChatScreen({ route, navigation }) {
         <View style={{ height: 74, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="small" color="#14004c" /></View>
       ) : (
         <>
-          {/* Finalize Button Conditions */}
-          {!transactionExists && isPostOwner && txStatus !== "completed" && (
+          { }
+          {txStatus !== "verifying" && txStatus !== "returning" && txStatus !== "returned" && txStatus !== "completed" && isPostOwner && (
             chatInfo.status !== "finalized" ? (
               <TouchableOpacity style={styles.finalizeBtn} onPress={handleFinalizeChoice} activeOpacity={0.8}>
                 <Text style={styles.finalizeBtnText}>🎯 Finalize Partner Choice</Text>
@@ -405,28 +598,47 @@ export default function ChatScreen({ route, navigation }) {
             )
           )}
 
-          {/* Start Transaction Button Conditions */}
-          {!transactionExists && isLender && chatInfo.status === "finalized" && txStatus !== "completed" && (
+          { }
+          {!transactionExists && isLender && chatInfo.status === "finalized" && (
             <TouchableOpacity style={styles.transactionBtn} onPress={startTransaction} activeOpacity={0.8}>
               <Text style={styles.transactionBtnText}>Start Transaction</Text>
             </TouchableOpacity>
           )}
 
-          {/* Return Action Button Conditions */}
+          { }
+          {txStatus === "verifying" && isLender && (
+            <TouchableOpacity style={styles.waitingBanner} onPress={() => Alert.alert("🔑 Code Reminder", `Provide this code to the borrower: ${expectedOtp}`)}>
+              <Text style={[styles.waitingBannerText, { color: '#14004c' }]}>🔑 Code: {expectedOtp} ({timeLeft}s left)</Text>
+            </TouchableOpacity>
+          )}
+
+          { }
           {txStatus === "pending" && isBorrower && (
             <TouchableOpacity style={styles.returnBtn} onPress={handleReturnProductAsset} activeOpacity={0.8}>
               <Text style={styles.returnBtnText}>🔄 Confirm Item Return</Text>
             </TouchableOpacity>
           )}
 
-          {/* Review Awaiting HUD Notification banner */}
+          { }
+          {txStatus === "returning" && isBorrower && (
+            <TouchableOpacity style={styles.waitingBanner} onPress={() => Alert.alert("🔑 Code Reminder", `Provide this return code to the lender: ${expectedOtp}`)}>
+              <Text style={[styles.waitingBannerText, { color: '#00875a' }]}>🔑 Return Code: {expectedOtp} ({timeLeft}s left)</Text>
+            </TouchableOpacity>
+          )}
+
+          { }
+          {txStatus === "returning" && isLender && (
+            <TouchableOpacity style={[styles.waitingBanner, { backgroundColor: '#e6f4ea', borderColor: '#34a85350' }]} onPress={() => setOtpVerifyModalVisible(true)}>
+              <Text style={[styles.waitingBannerText, { color: '#137333' }]}>🔒 Borrower Returning Item! Tap to Enter Code ({timeLeft}s left)</Text>
+            </TouchableOpacity>
+          )}
+
           {txStatus === "returned" && (
             <View style={styles.waitingBanner}>
               <Text style={styles.waitingBannerText}>Awaiting Peer Reviews Submission...</Text>
             </View>
           )}
 
-          {/* Deal Completed Banner */}
           {txStatus === "completed" && (
             <View style={styles.completedBanner}>
               <Text style={styles.completedBannerText}>✅ Deal Completed & Reviewed Successfully</Text>
@@ -468,7 +680,7 @@ const styles = StyleSheet.create({
   returnBtn: { backgroundColor: "#00875a", margin: 15, padding: 15, borderRadius: 10, alignItems: "center" },
   returnBtnText: { color: "white", fontWeight: "bold", fontSize: 16 },
   waitingBanner: { backgroundColor: "#fff9e6", margin: 15, padding: 14, borderRadius: 10, alignItems: "center", borderWidth: 1, borderColor: "#ffb30050" },
-  waitingBannerText: { color: "#b78103", fontWeight: "700" },
+  waitingBannerText: { color: "#b78103", fontWeight: "700", textAlign: 'center' },
   completedBanner: { backgroundColor: "#f2f2f7", margin: 15, padding: 14, borderRadius: 10, alignItems: "center" },
   completedBannerText: { color: "#00875a", fontWeight: "700", fontSize: 15 },
   inputActionRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#e5e5ea' },
@@ -484,5 +696,7 @@ const styles = StyleSheet.create({
   starRow: { flexDirection: 'row', marginBottom: 24 },
   starItem: { fontSize: 42, marginHorizontal: 6 },
   submitReviewBtn: { backgroundColor: '#14004c', width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  submitReviewBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' }
+  submitReviewBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  otpInputBox: { width: '80%', height: 54, borderWidth: 2, borderColor: '#14004c', borderRadius: 12, fontSize: 24, fontWeight: 'bold', letterSpacing: 4, color: '#14004c', backgroundColor: '#f2f2f7', marginBottom: 12 },
+  timerCountdownText: { fontSize: 13, fontWeight: '600', color: '#8e8e93', marginBottom: 20 }
 });

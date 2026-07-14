@@ -88,6 +88,7 @@ export default function SearchScreen({ navigation, route }) {
       const qRequests = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
       unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // ✅ FIXED: Ensures posts marked as "finalized" are dropped from search feeds
         const peerRequests = allDocs.filter(doc =>
           doc.userId !== currentUserId && 
           !blockedUserIds.includes(doc.userId) &&
@@ -103,8 +104,12 @@ export default function SearchScreen({ navigation, route }) {
       const qListings = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
       unsubscribeListings = onSnapshot(qListings, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // ✅ FIXED: Ensures listings marked as "finalized" are dropped from search feeds
         const peerListings = allDocs.filter(doc =>
-          doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId) && doc.isDeleted !== true
+          doc.userId !== currentUserId && 
+          !blockedUserIds.includes(doc.userId) &&
+          doc.status !== "finalized" &&
+          doc.isDeleted !== true
         );
         setListings(peerListings);
         if (activeTab === 'List') setLoading(false);
@@ -334,8 +339,6 @@ const styles = StyleSheet.create({
   emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60 },
   emptyText: { fontSize: 18, fontWeight: 'bold', color: '#444444', marginBottom: 6 },
   emptySubtext: { fontSize: 14, color: '#8e8e93', textAlign: 'center' },
-  
-  // 🌟 Rating Custom Badge Styles
   authorMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   authorHandleText: { fontSize: 14, color: '#8e8e93', marginRight: 8, fontWeight: '500' },
   ratingBadgeText: { fontSize: 13, fontWeight: '700', color: '#ffb300', backgroundColor: '#fff9e6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' }

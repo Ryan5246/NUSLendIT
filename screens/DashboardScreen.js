@@ -18,7 +18,6 @@ import { getCampusLocationLabel } from './PostScreen';
 
 const { width } = Dimensions.get('window');
 
-// 🌟 INLINE BADGE LOADER: Resolves and mounts real-time star averages on the dashboard preview cards
 function UserRatingBadge({ userId }) {
   const [ratingInfo, setRatingInfo] = useState({ avg: 0, count: 0 });
 
@@ -110,7 +109,10 @@ export default function DashboardScreen({ navigation }) {
       unsubscribeLend = onSnapshot(qLend, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         const peerListings = allDocs.filter(doc =>
-          doc.userId !== currentUserId && !blockedUserIds.includes(doc.userId) && doc.isDeleted !== true
+          doc.userId !== currentUserId && 
+          !blockedUserIds.includes(doc.userId) &&
+          doc.status !== "finalized" &&
+          doc.isDeleted !== true
         );
         setPeerLend(peerListings.length > 0 ? peerListings[0] : null);
       });
@@ -345,8 +347,6 @@ const styles = StyleSheet.create({
   emptyCard: { backgroundColor: '#f8f8fa', borderRadius: 16, padding: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e5e5ea', borderStyle: 'dashed' },
   emptyCardText: { color: '#8e8e93', fontSize: 14, textAlign: 'center' },
   menuRatingLabel: { fontSize: 15, fontWeight: '700', color: '#ffb300', marginTop: 6, backgroundColor: '#fff9e6', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden' },
-  
-  // Rating custom label styles
   authorMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
   ratingBadgeText: { fontSize: 12, fontWeight: '700', color: '#ffb300', backgroundColor: '#fff9e6', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' }
 });

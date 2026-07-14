@@ -8,6 +8,7 @@ import {
     TextInput,
     TouchableOpacity,
     StyleSheet,
+    Platform,
 } from "react-native";
 
 import {
@@ -29,6 +30,121 @@ Notifications.setNotificationHandler({
         shouldSetBadge: false,
     }),
 });
+
+const ONE_HOUR = 60 * 60 * 1000;
+const ONE_DAY = 24 * ONE_HOUR;
+
+const requestNotificationPermission = async () => {
+    if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync(
+            "return-reminders",
+            {
+                name: "Return Reminders",
+                importance: Notifications.AndroidImportance.HIGH,
+                vibrationPattern: [0, 250, 250, 250],
+                sound: "default",
+            }
+        );
+    }
+
+    const existingPermission =
+        await Notifications.getPermissionsAsync();
+
+    let finalStatus = existingPermission.status;
+
+    if (finalStatus !== "granted") {
+        const requestedPermission =
+            await Notifications.requestPermissionsAsync();
+
+        finalStatus = requestedPermission.status;
+    }
+
+    return finalStatus === "granted";
+};
+
+const scheduleReturnReminders = async (
+    transactionId,
+    itemTitle,
+    returnDate
+) => {
+    const permissionGranted =
+        await requestNotificationPermission();
+
+    if (!permissionGranted) {
+        Alert.alert(
+            "Notifications Disabled",
+            "Enable notifications in your phone settings to receive return reminders."
+        );
+
+        return [];
+    }
+
+    const returnTime = returnDate.getTime();
+    const now = Date.now();
+
+    const reminders = [
+        {
+            type: "return_24_hours_before",
+            date: new Date(returnTime - ONE_DAY),
+            title: "📦 Return Reminder",
+            body: `${itemTitle || "Your borrowed item"} is due in 24 hours.`,
+        },
+        {
+            type: "return_1_hour_before",
+            date: new Date(returnTime - ONE_HOUR),
+            title: "⏰ Return Due Soon",
+            body: `${itemTitle || "Your borrowed item"} is due in 1 hour.`,
+        },
+        {
+            type: "return_1_hour_overdue",
+            date: new Date(returnTime + ONE_HOUR),
+            title: "⚠️ Item Overdue",
+            body: `${itemTitle || "Your borrowed item"} is now 1 hour overdue.`,
+        },
+        {
+            type: "return_24_hours_overdue",
+            date: new Date(returnTime + ONE_DAY),
+            title: "🚨 Item Seriously Overdue",
+            body: `${itemTitle || "Your borrowed item"} is more than 24 hours overdue.`,
+        },
+    ];
+
+    const scheduledNotificationIds = [];
+
+    for (const reminder of reminders) {
+        if (reminder.date.getTime() <= now) {
+            continue;
+        }
+
+        const notificationId =
+            await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: reminder.title,
+                    body: reminder.body,
+                    sound: "default",
+                    data: {
+                        type: reminder.type,
+                        transactionId,
+                    },
+                },
+
+                trigger: {
+                    type:
+                        Notifications
+                            .SchedulableTriggerInputTypes.DATE,
+                    date: reminder.date,
+                    channelId:
+                        Platform.OS === "android"
+                            ? "return-reminders"
+                            : undefined,
+                },
+            });
+
+        scheduledNotificationIds.push(notificationId);
+    }
+
+    return scheduledNotificationIds;
+};
 
 export default function VerifyScreen() {
     const [transaction, setTransaction] = useState(null);
@@ -106,29 +222,85 @@ export default function VerifyScreen() {
 
     const verifyOTP = async () => {
         if (!transaction) return;
-        // OTP expires after 5 minutes
+
         if (
             transaction.otpCreatedAt &&
-            Date.now() - transaction.otpCreatedAt > 5 * 60 * 1000
+            Date.now() - transaction.otpCreatedAt >
+            5 * 60 * 1000
         ) {
-            Alert.alert("OTP Expired", "Please ask the lender to generate a new OTP.");
+            Alert.alert(
+                "OTP Expired",
+                "Please ask the lender to generate a new OTP."
+            );
             return;
         }
 
-        if (enteredOtp === transaction.otp) {
+        if (enteredOtp.trim() !== transaction.otp) {
+            Alert.alert("Error", "Wrong OTP");
+            return;
+        }
+
+        try {
+            if (!transaction.returnDateTimestamp) {
+                Alert.alert(
+                    "Return Date Missing",
+                    "This transaction does not have a return date."
+                );
+                return;
+            }
+
+            const returnDate =
+                transaction.returnDateTimestamp.toDate();
+
+            if (returnDate.getTime() <= Date.now()) {
+                Alert.alert(
+                    "Invalid Return Date",
+                    "The return date has already passed."
+                );
+                return;
+            }
+
+            const notificationIds =
+                await scheduleReturnReminders(
+                    transaction.id,
+                    transaction.itemTitle,
+                    returnDate
+                );
+
             await updateDoc(
                 doc(db, "transactions", transaction.id),
                 {
-                    status: "completed",
+                    status: "pending",
                     otp: null,
                     otpCreatedAt: null,
+
+                    borrowedAt: Date.now(),
+
+                    borrowerNotificationIds:
+                        notificationIds,
+
+                    returnRemindersScheduled: true,
+                    returnRemindersScheduledAt:
+                        Date.now(),
                 }
             );
 
-            Alert.alert("Success", "Verification Successful");
+            Alert.alert(
+                "Borrowing Confirmed",
+                `Return reminders scheduled for ${returnDate.toLocaleString()}.`
+            );
+
             setEnteredOtp("");
-        } else {
-            Alert.alert("Error", "Wrong OTP");
+        } catch (err) {
+            console.log(
+                "OTP verification error:",
+                err
+            );
+
+            Alert.alert(
+                "Error",
+                "Verification failed. Please try again."
+            );
         }
     };
 

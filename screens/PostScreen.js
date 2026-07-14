@@ -16,11 +16,21 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { db, auth } from '../firebaseConfig';
-import { doc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
-// Official NUS Map Reference Locations Lookup Dictionary
+import {
+  doc,
+  getDoc,
+  getDocs,
+  collection,
+  addDoc,
+  serverTimestamp,
+  Timestamp,
+  query,
+  where
+} from 'firebase/firestore';
+
+
 export const NUS_CAMPUS_HUBS = [
-  // === FACULTIES, SCHOOLS & ACADEMIC CLUSTERS ===
   { label: "BIZ - NUS Business School (Mochtar Riady Bldg / Biz 1 / Biz 2)", value: "BIZ" },
   { label: "CDE - College of Design and Engineering (EA / E1 - E5 / EW1)", value: "CDE" },
   { label: "COM - School of Computing (COM 1 / COM 2)", value: "SOC" },
@@ -34,7 +44,7 @@ export const NUS_CAMPUS_HUBS = [
   { label: "NUSC - NUS College (Cinnamon College / UTown)", value: "NUSC" },
   { label: "YST - Yong Siew Toh Conservatory of Music", value: "YST_MUSIC" },
 
-  // === CENTRAL HUBS & CAMPUS AMENITIES ===
+
   { label: "Central Library (CL / CL Annexe)", value: "CENTRAL_LIBRARY" },
   { label: "YIH - Yusof Ishak House (Student Union / Co-op / Starbucks)", value: "YIH" },
   { label: "UTown - Stephen Riady Centre (SRC)", value: "SRC_UTOWN" },
@@ -45,11 +55,11 @@ export const NUS_CAMPUS_HUBS = [
   { label: "MPSH - Multi-Purpose Sports Halls (MPSH 1 - MPSH 6)", value: "MPSH" },
   { label: "NUH - National University Hospital (Kent Ridge Wing / Medical Centre)", value: "NUH" },
 
-  // === TRANSPORT & TRANSIT TERMINALS ===
+
   { label: "Kent Ridge MRT Station (CC24)", value: "KR_MRT" },
   { label: "Kent Ridge Bus Terminal", value: "KR_TERMINAL" },
 
-  // === HALLS OF RESIDENCE ===
+
   { label: "Halls: Eusoff Hall", value: "EUSOFF_HALL" },
   { label: "Halls: Kent Ridge Hall", value: "KR_HALL" },
   { label: "Halls: King Edward VII Hall", value: "KEVII_HALL" },
@@ -57,14 +67,14 @@ export const NUS_CAMPUS_HUBS = [
   { label: "Halls: Sheares Hall", value: "SHEARES_HALL" },
   { label: "Halls: Temasek Hall", value: "TEMASEK_HALL" },
 
-  // === STUDENT RESIDENCES & HOUSES ===
+
   { label: "Residences: Prince George's Park Residences (PGPR)", value: "PGPR" },
   { label: "Residences: Pioneer House", value: "PIONEER_HOUSE" },
   { label: "Residences: Valour House", value: "VALOUR_HOUSE" },
   { label: "Houses: Helix House", value: "HELIX_HOUSE" },
   { label: "Houses: LightHouse", value: "LIGHTHOUSE" },
 
-  // === RESIDENTIAL COLLEGES & GRADUATE HOUSING ===
+
   { label: "RCs: Cinnamon College (USP)", value: "CINNAMON_RC" },
   { label: "RCs: College of Alice & Peter Tan (CAPT)", value: "CAPT_RC" },
   { label: "RCs: Residential College 4 (RC4)", value: "RC4_RC" },
@@ -73,7 +83,7 @@ export const NUS_CAMPUS_HUBS = [
   { label: "Grad: UTown Residence (North Tower / South Tower)", value: "UTOWN_RES" },
   { label: "Grad: Kent Vale Staff Residences", value: "KENT_VALE" },
 
-  // === SPECIAL RESEARCH BUILDINGS ===
+
   { label: "TCOMS (Technology Centre for Offshore and Marine, Singapore)", value: "TCOMS" },
   { label: "I3 Building (Innovation 4.0)", value: "I3_BUILDING" },
   { label: "Ventus (University Campus Infrastructure Building)", value: "VENTUS" },
@@ -92,17 +102,365 @@ const formatDateString = (date) => {
   return `${day}/${month}/${year}`;
 };
 
-// 🔍 Reconfigured Shared Searchable Selector Component
+const NEARBY_RADIUS_KM = 1.5;
+
+const CAMPUS_COORDINATES = {
+  BIZ: { latitude: 1.2925, longitude: 103.7742 },
+  CDE: { latitude: 1.3002, longitude: 103.7716 },
+  SOC: { latitude: 1.2945, longitude: 103.7741 },
+  FASS: { latitude: 1.2979, longitude: 103.7728 },
+  FoS: { latitude: 1.2968, longitude: 103.7801 },
+  LAW: { latitude: 1.3190, longitude: 103.8181 },
+  MED: { latitude: 1.2938, longitude: 103.7832 },
+  SDE: { latitude: 1.2995, longitude: 103.7702 },
+  DUKE_NUS: { latitude: 1.2801, longitude: 103.8344 },
+  LKYSPP: { latitude: 1.3198, longitude: 103.8175 },
+  NUSC: { latitude: 1.3055, longitude: 103.7725 },
+  YST_MUSIC: { latitude: 1.3015, longitude: 103.7738 },
+  CENTRAL_LIBRARY: { latitude: 1.2965, longitude: 103.7726 },
+  YIH: { latitude: 1.2991, longitude: 103.7747 },
+  SRC_UTOWN: { latitude: 1.3048, longitude: 103.7733 },
+  ERC_UTOWN: { latitude: 1.3059, longitude: 103.7721 },
+  PLAZA_UTOWN: { latitude: 1.3051, longitude: 103.7727 },
+  UCC: { latitude: 1.3012, longitude: 103.7724 },
+  UHALL: { latitude: 1.2994, longitude: 103.7719 },
+  MPSH: { latitude: 1.2998, longitude: 103.7761 },
+  NUH: { latitude: 1.2942, longitude: 103.7839 },
+  KR_MRT: { latitude: 1.2931, longitude: 103.7852 },
+  KR_TERMINAL: { latitude: 1.2937, longitude: 103.7699 },
+  EUSOFF_HALL: { latitude: 1.2946, longitude: 103.7705 },
+  KR_HALL: { latitude: 1.2934, longitude: 103.7792 },
+  KEVII_HALL: { latitude: 1.2917, longitude: 103.7818 },
+  RAFFLES_HALL: { latitude: 1.3005, longitude: 103.7739 },
+  SHEARES_HALL: { latitude: 1.2922, longitude: 103.7788 },
+  TEMASEK_HALL: { latitude: 1.2928, longitude: 103.7781 },
+  PGPR: { latitude: 1.2905, longitude: 103.7812 },
+  PIONEER_HOUSE: { latitude: 1.2909, longitude: 103.7806 },
+  VALOUR_HOUSE: { latitude: 1.2912, longitude: 103.7809 },
+  HELIX_HOUSE: { latitude: 1.2918, longitude: 103.7803 },
+  LIGHTHOUSE: { latitude: 1.2931, longitude: 103.7709 },
+  CINNAMON_RC: { latitude: 1.3054, longitude: 103.7726 },
+  CAPT_RC: { latitude: 1.3065, longitude: 103.7734 },
+  RC4_RC: { latitude: 1.3068, longitude: 103.7741 },
+  TEMBUSU_RC: { latitude: 1.3062, longitude: 103.7748 },
+  RVRC_RC: { latitude: 1.3011, longitude: 103.7782 },
+  UTOWN_RES: { latitude: 1.3061, longitude: 103.7718 },
+  KENT_VALE: { latitude: 1.3025, longitude: 103.7681 },
+  TCOMS: { latitude: 1.2974, longitude: 103.7779 },
+  I3_BUILDING: { latitude: 1.2932, longitude: 103.7766 },
+  VENTUS: { latitude: 1.2961, longitude: 103.7718 },
+  ALUMNI_HOUSE: { latitude: 1.2928, longitude: 103.7738 }
+};
+
+const toRadians = (degrees) => {
+  return degrees * Math.PI / 180;
+};
+
+const calculateDistanceKm = (pointA, pointB) => {
+  const earthRadiusKm = 6371;
+
+  const latitudeDifference = toRadians(
+    pointB.latitude - pointA.latitude
+  );
+
+  const longitudeDifference = toRadians(
+    pointB.longitude - pointA.longitude
+  );
+
+  const firstLatitude = toRadians(pointA.latitude);
+  const secondLatitude = toRadians(pointB.latitude);
+
+  const value =
+    Math.sin(latitudeDifference / 2) ** 2 +
+    Math.cos(firstLatitude) *
+    Math.cos(secondLatitude) *
+    Math.sin(longitudeDifference / 2) ** 2;
+
+  const angularDistance =
+    2 *
+    Math.atan2(
+      Math.sqrt(value),
+      Math.sqrt(1 - value)
+    );
+
+  return earthRadiusKm * angularDistance;
+};
+
+const normaliseItemName = (value) => {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+};
+
+const itemNamesMatch = (requestedItem, listedItem) => {
+  const requestText = normaliseItemName(requestedItem);
+  const listingText = normaliseItemName(listedItem);
+
+  if (!requestText || !listingText) {
+    return false;
+  }
+
+  if (requestText === listingText) {
+    return true;
+  }
+
+  if (
+    requestText.includes(listingText) ||
+    listingText.includes(requestText)
+  ) {
+    return true;
+  }
+
+  const requestWords = new Set(requestText.split(' '));
+
+  return listingText
+    .split(' ')
+    .some(
+      word =>
+        word.length >= 3 &&
+        requestWords.has(word)
+    );
+};
+
+const isValidExpoPushToken = (token) => {
+  return (
+    typeof token === 'string' &&
+    (
+      token.startsWith('ExponentPushToken[') ||
+      token.startsWith('ExpoPushToken[')
+    )
+  );
+};
+
+const sendExpoPushMessages = async (messages) => {
+  if (!messages.length) {
+    return 0;
+  }
+
+  const response = await fetch(
+    'https://exp.host/--/api/v2/push/send',
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(messages)
+    }
+  );
+
+  const responseData = await response.json();
+
+  if (!response.ok) {
+    console.error(
+      'Expo notification error:',
+      responseData
+    );
+
+    return 0;
+  }
+
+  console.log(
+    'Nearby notification result:',
+    responseData
+  );
+
+  return messages.length;
+};
+
+const notifyNearbyListingOwners = async ({
+  requestId,
+  requesterId,
+  requestedItem,
+  requestLocation,
+  requesterUsername
+}) => {
+  try {
+    const requestCoordinates =
+      CAMPUS_COORDINATES[requestLocation];
+
+    if (!requestCoordinates) {
+      console.log(
+        'No coordinates for request location:',
+        requestLocation
+      );
+
+      return 0;
+    }
+
+    const listingsQuery = collection(db, 'listings');
+
+    const listingsSnapshot =
+      await getDocs(listingsQuery);
+
+    const matchingOwners = new Map();
+
+    for (const listingDoc of listingsSnapshot.docs) {
+      const listing = listingDoc.data();
+
+      if (
+        !listing.userId ||
+        listing.userId === requesterId ||
+        listing.status === 'finalized'
+      ) {
+        continue;
+      }
+
+      if (
+        !itemNamesMatch(
+          requestedItem,
+          listing.item
+        )
+      ) {
+        continue;
+      }
+
+      const listingCoordinates =
+        CAMPUS_COORDINATES[listing.location];
+
+      if (!listingCoordinates) {
+        continue;
+      }
+
+      const distanceKm =
+        calculateDistanceKm(
+          requestCoordinates,
+          listingCoordinates
+        );
+
+      if (distanceKm > NEARBY_RADIUS_KM) {
+        continue;
+      }
+
+      if (!matchingOwners.has(listing.userId)) {
+        matchingOwners.set(listing.userId, {
+          listingId: listingDoc.id,
+          distanceKm
+        });
+      }
+    }
+
+    const notificationMessages = [];
+
+    for (const [ownerId, match] of matchingOwners) {
+      const ownerProfileSnapshot =
+        await getDoc(
+          doc(db, 'username', ownerId)
+        );
+
+      if (!ownerProfileSnapshot.exists()) {
+        continue;
+      }
+
+      const ownerProfile =
+        ownerProfileSnapshot.data();
+
+      const token =
+        ownerProfile.expoPushToken;
+
+      if (!isValidExpoPushToken(token)) {
+        continue;
+      }
+
+      notificationMessages.push({
+        to: token,
+        sound: 'default',
+        priority: 'high',
+        channelId: 'nearby-requests',
+
+        title:
+          '📦 Someone nearby needs your item',
+
+        body:
+          `@${requesterUsername || 'student'} needs ` +
+          `${requestedItem} about ` +
+          `${match.distanceKm.toFixed(1)} km from your listing.`,
+
+        data: {
+          type: 'nearby_item_request',
+          requestId,
+          listingId: match.listingId,
+          requestedItem,
+          requestLocation
+        }
+      });
+    }
+
+    return await sendExpoPushMessages(
+      notificationMessages
+    );
+  } catch (error) {
+    console.error(
+      'Nearby notification failed:',
+      error
+    );
+
+    return 0;
+  }
+};
+
+
+
+
+
+
+
+const getStartOfToday = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+};
+
+const normaliseDate = (date) => {
+  const normalisedDate = new Date(date);
+  normalisedDate.setHours(0, 0, 0, 0);
+  return normalisedDate;
+};
+
+const sanitiseMoneyInput = (value) => {
+  const cleanedValue = value.replace(/[^0-9.]/g, '');
+  const parts = cleanedValue.split('.');
+
+  const wholeNumber = parts[0].slice(0, 5);
+  const decimalPart = parts.slice(1).join('').slice(0, 2);
+
+  if (cleanedValue.includes('.')) {
+    return `${wholeNumber}.${decimalPart}`;
+  }
+
+  return wholeNumber;
+};
+
+const isValidMoneyAmount = (value, allowZero = true) => {
+  const validFormat = /^\d+(\.\d{1,2})?$/.test(value);
+
+  if (!validFormat) {
+    return false;
+  }
+
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount > 10000) {
+    return false;
+  }
+
+  return allowZero ? amount >= 0 : amount > 0;
+};
+
+
 function HubPickerModal({ visible, onClose, onSelect }) {
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Clear query on close or reset triggers
+
   const handleClose = () => {
     setSearchQuery('');
     onClose();
   };
 
-  // Filter items match-by-match on layout computation
+
   const filteredHubs = NUS_CAMPUS_HUBS.filter(hub =>
     hub.label.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -118,7 +476,7 @@ function HubPickerModal({ visible, onClose, onSelect }) {
             </TouchableOpacity>
           </View>
 
-          {/* 🔍 Dynamic Filter Input Box */}
+          { }
           <View style={styles.modalSearchWrapper}>
             <TextInput
               style={styles.modalSearchInput}
@@ -162,7 +520,7 @@ function HubPickerModal({ visible, onClose, onSelect }) {
 function RequestForm() {
   const [username, setUsername] = useState('anonymous');
   const [item, setItem] = useState('');
-  const [location, setLocation] = useState(''); 
+  const [location, setLocation] = useState('');
   const [borrowDate, setBorrowDate] = useState(new Date());
   const [returnDate, setReturnDate] = useState(new Date());
   const [willingToPay, setWillingToPay] = useState('');
@@ -187,38 +545,208 @@ function RequestForm() {
   }, []);
 
   const handleBorrowDateChange = (event, selectedDate) => {
-    if (Platform.OS === 'android') setShowBorrowPicker(false);
-    if (selectedDate) setBorrowDate(selectedDate);
+    if (Platform.OS === 'android') {
+      setShowBorrowPicker(false);
+    }
+
+    if (!selectedDate) {
+      return;
+    }
+
+    const selectedBorrowDate = normaliseDate(selectedDate);
+    const today = getStartOfToday();
+
+    if (selectedBorrowDate < today) {
+      Alert.alert(
+        'Invalid Date',
+        'Borrow date cannot be before today.'
+      );
+      return;
+    }
+
+    setBorrowDate(selectedBorrowDate);
+
+    if (normaliseDate(returnDate) < selectedBorrowDate) {
+      setReturnDate(selectedBorrowDate);
+    }
   };
 
   const handleReturnDateChange = (event, selectedDate) => {
-    if (Platform.OS === 'android') setShowReturnPicker(false);
-    if (selectedDate) setReturnDate(selectedDate);
+    if (Platform.OS === 'android') {
+      setShowReturnPicker(false);
+    }
+
+    if (!selectedDate) {
+      return;
+    }
+
+    const selectedReturnDate = normaliseDate(selectedDate);
+    const selectedBorrowDate = normaliseDate(borrowDate);
+
+    if (selectedReturnDate < selectedBorrowDate) {
+      Alert.alert(
+        'Invalid Date',
+        'Return date cannot be before the borrow date.'
+      );
+      return;
+    }
+
+    setReturnDate(selectedReturnDate);
   };
 
   const handlePostRequest = async () => {
-    if (!item || !location || !borrowDate || !returnDate || !willingToPay || !deposit || !description) {
-      return Alert.alert('Missing Fields', 'Please fill out all fields.');
+    if (loading) {
+      return;
+    }
+
+    const trimmedItem = item.trim();
+    const trimmedDescription = description.trim();
+
+    const today = getStartOfToday();
+    const selectedBorrowDate = normaliseDate(borrowDate);
+    const selectedReturnDate = normaliseDate(returnDate);
+
+    if (
+      !trimmedItem ||
+      !location ||
+      !willingToPay ||
+      !deposit ||
+      !trimmedDescription
+    ) {
+      Alert.alert(
+        'Missing Fields',
+        'Please fill out all fields.'
+      );
+      return;
+    }
+
+    if (trimmedItem.length < 2) {
+      Alert.alert(
+        'Invalid Item',
+        'Item name must contain at least 2 characters.'
+      );
+      return;
+    }
+
+    if (trimmedDescription.length < 5) {
+      Alert.alert(
+        'Invalid Description',
+        'Please enter at least 5 characters.'
+      );
+      return;
+    }
+
+    if (selectedBorrowDate < today) {
+      Alert.alert(
+        'Invalid Date',
+        'Borrow date must be today or later.'
+      );
+      return;
+    }
+
+    if (selectedReturnDate < selectedBorrowDate) {
+      Alert.alert(
+        'Invalid Date',
+        'Return date cannot be before the borrow date.'
+      );
+      return;
+    }
+
+    if (!isValidMoneyAmount(willingToPay, false)) {
+      Alert.alert(
+        'Invalid Amount',
+        'Willing to pay must be greater than 0 and can have a maximum of 2 decimal places.'
+      );
+      return;
+    }
+
+    if (!isValidMoneyAmount(deposit, true)) {
+      Alert.alert(
+        'Invalid Deposit',
+        'Security deposit must be between 0 and 10000 and can have a maximum of 2 decimal places.'
+      );
+      return;
     }
 
     setLoading(true);
 
     try {
-      await addDoc(collection(db, 'requests'), {
-        userId: auth.currentUser?.uid || 'anonymous_student',
-        username: username,
-        item: item,
-        location: location, 
-        borrowdate: formatDateString(borrowDate),
-        returndate: formatDateString(returnDate),
-        willingToPay: willingToPay,
-        deposit: deposit,
-        description: description,
-        createdAt: serverTimestamp(),
-        isDeleted: false
-      });
+      const requesterId =
+        auth.currentUser?.uid;
 
-      Alert.alert('Success', 'Your borrow request has been posted!');
+      if (!requesterId) {
+        Alert.alert(
+          'Login Required',
+          'You must be logged in to post a request.'
+        );
+
+        return;
+      }
+
+      const requestDocument =
+        await addDoc(
+          collection(db, 'requests'),
+          {
+            userId: requesterId,
+            username: username,
+
+            item: trimmedItem,
+            itemSearch:
+              normaliseItemName(trimmedItem),
+
+            location: location,
+
+            borrowdate:
+              formatDateString(borrowDate),
+
+            returndate:
+              formatDateString(returnDate),
+
+            returnDateTimestamp:
+              Timestamp.fromDate(returnDate),
+
+            willingToPay:
+              Number(willingToPay).toFixed(2),
+
+            deposit:
+              Number(deposit).toFixed(2),
+
+            description:
+              trimmedDescription,
+
+            createdAt:
+              serverTimestamp(),
+
+            isDeleted: false,
+            status: 'active'
+          }
+        );
+
+
+      const notificationCount =
+        await notifyNearbyListingOwners({
+          requestId:
+            requestDocument.id,
+
+          requesterId,
+
+          requestedItem:
+            trimmedItem,
+
+          requestLocation:
+            location,
+
+          requesterUsername:
+            username
+        });
+
+      Alert.alert(
+        'Success',
+        notificationCount > 0
+          ? `Your request was posted and ${notificationCount} nearby matching owner${notificationCount === 1 ? '' : 's'} were notified!`
+          : 'Your request was posted successfully. No nearby matching listings were found right now.'
+      );
+
       setItem('');
       setLocation('');
       setBorrowDate(new Date());
@@ -227,8 +755,12 @@ function RequestForm() {
       setDeposit('');
       setDescription('');
     } catch (error) {
-      console.error("Firestore Error: ", error);
-      Alert.alert('Database Error', 'Could not save your post. Make sure your internet is working.');
+      console.error('Firestore Error: ', error);
+
+      Alert.alert(
+        'Database Error',
+        'Could not save your post. Make sure your internet is working.'
+      );
     } finally {
       setLoading(false);
     }
@@ -272,7 +804,7 @@ function RequestForm() {
           value={borrowDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          minimumDate={new Date()}
+          minimumDate={getStartOfToday()}
           onChange={handleBorrowDateChange}
         />
       )}
@@ -306,10 +838,32 @@ function RequestForm() {
       )}
 
       <Text style={styles.label}>Willing To Pay:</Text>
-      <TextInput style={styles.input} placeholder="Eg: 1.70" placeholderTextColor="#a0a0a0" value={willingToPay} onChangeText={setWillingToPay} />
+      <TextInput
+        style={styles.input}
+        placeholder="Eg: 1.70"
+        placeholderTextColor="#a0a0a0"
+        value={willingToPay}
+        onChangeText={(value) =>
+          setWillingToPay(sanitiseMoneyInput(value))
+        }
+        keyboardType="decimal-pad"
+        inputMode="decimal"
+        maxLength={8}
+      />
 
       <Text style={styles.label}>Security Deposit:</Text>
-      <TextInput style={styles.input} placeholder="Eg: 12.00" placeholderTextColor="#a0a0a0" value={deposit} onChangeText={setDeposit} />
+      <TextInput
+        style={styles.input}
+        placeholder="Eg: 12.00"
+        placeholderTextColor="#a0a0a0"
+        value={deposit}
+        onChangeText={(value) =>
+          setDeposit(sanitiseMoneyInput(value))
+        }
+        keyboardType="decimal-pad"
+        inputMode="decimal"
+        maxLength={8}
+      />
 
       <Text style={styles.label}>Description:</Text>
       <TextInput style={[styles.input, styles.textArea]} placeholder="Eg: Casio Model Ex-1312" placeholderTextColor="#a0a0a0" multiline={true} value={description} onChangeText={setDescription} />
@@ -346,34 +900,122 @@ function ListingForm() {
   }, []);
 
   const handlePostListing = async () => {
-    if (!item || !location || !costPerDay || !deposit || !returnConditions) {
-      return Alert.alert('Missing Fields', 'Please fill out all fields.');
+    if (loading) {
+      return;
+    }
+
+    const trimmedItem = item.trim();
+    const trimmedReturnConditions =
+      returnConditions.trim();
+
+    if (
+      !trimmedItem ||
+      !location ||
+      !costPerDay ||
+      !deposit ||
+      !trimmedReturnConditions
+    ) {
+      Alert.alert(
+        'Missing Fields',
+        'Please fill out all fields.'
+      );
+      return;
+    }
+
+    if (trimmedItem.length < 2) {
+      Alert.alert(
+        'Invalid Item',
+        'Item name must contain at least 2 characters.'
+      );
+      return;
+    }
+
+    if (trimmedReturnConditions.length < 5) {
+      Alert.alert(
+        'Invalid Requirements',
+        'Please enter at least 5 characters.'
+      );
+      return;
+    }
+
+    if (!isValidMoneyAmount(costPerDay, false)) {
+      Alert.alert(
+        'Invalid Cost',
+        'Cost per day must be greater than 0.'
+      );
+      return;
+    }
+
+    if (!isValidMoneyAmount(deposit, true)) {
+      Alert.alert(
+        'Invalid Deposit',
+        'Invalid deposit amount.'
+      );
+      return;
     }
 
     setLoading(true);
 
     try {
-      await addDoc(collection(db, 'listings'), {
-        userId: auth.currentUser?.uid || 'anonymous_student',
-        username: username,
-        item: item,
-        location: location,
-        costPerDay: costPerDay,
-        deposit: deposit,
-        returnConditions: returnConditions,
-        createdAt: serverTimestamp(),
-        isDeleted: false
-      });
+      const currentUserId = auth.currentUser?.uid;
 
-      Alert.alert('Success', 'Your item listing has been posted!');
+      if (!currentUserId) {
+        Alert.alert(
+          'Login Required',
+          'Please log in.'
+        );
+        return;
+      }
+
+      await addDoc(
+        collection(db, 'listings'),
+        {
+          userId: currentUserId,
+          username: username,
+
+          item: trimmedItem,
+
+          itemSearch:
+            normaliseItemName(trimmedItem),
+
+          location: location,
+
+          costPerDay:
+            Number(costPerDay).toFixed(2),
+
+          deposit:
+            Number(deposit).toFixed(2),
+
+          returnConditions:
+            trimmedReturnConditions,
+
+          createdAt:
+            serverTimestamp(),
+
+          isDeleted: false,
+          status: 'active'
+        }
+      );
+
+      Alert.alert(
+        'Success',
+        'Your listing has been posted!'
+      );
+
       setItem('');
       setLocation('');
       setCostPerDay('');
       setDeposit('');
       setReturnConditions('');
+
     } catch (error) {
-      console.error("Firestore Error: ", error);
-      Alert.alert('Database Error', 'Could not save your listing. Please try again.');
+      console.error(error);
+
+      Alert.alert(
+        'Database Error',
+        'Could not save listing.'
+      );
+
     } finally {
       setLoading(false);
     }
@@ -395,10 +1037,32 @@ function ListingForm() {
       </TouchableOpacity>
 
       <Text style={styles.label}>Cost Per Day:</Text>
-      <TextInput style={styles.input} placeholder="Eg: 0.50" placeholderTextColor="#a0a0a0" value={costPerDay} onChangeText={setCostPerDay} />
+      <TextInput
+        style={styles.input}
+        placeholder="Eg: 0.50"
+        placeholderTextColor="#a0a0a0"
+        value={costPerDay}
+        onChangeText={(value) =>
+          setCostPerDay(sanitiseMoneyInput(value))
+        }
+        keyboardType="decimal-pad"
+        inputMode="decimal"
+        maxLength={8}
+      />
 
       <Text style={styles.label}>Security Deposit:</Text>
-      <TextInput style={styles.input} placeholder="Eg: 10.25" placeholderTextColor="#a0a0a0" value={deposit} onChangeText={setDeposit} />
+      <TextInput
+        style={styles.input}
+        placeholder="Eg: 10.25"
+        placeholderTextColor="#a0a0a0"
+        value={deposit}
+        onChangeText={(value) =>
+          setDeposit(sanitiseMoneyInput(value))
+        }
+        keyboardType="decimal-pad"
+        inputMode="decimal"
+        maxLength={8}
+      />
 
       <Text style={styles.label}>Return Requirements:</Text>
       <TextInput style={[styles.input, styles.textArea]} placeholder="Eg: Wash before returning. Must return by end of reading week." placeholderTextColor="#a0a0a0" multiline={true} value={returnConditions} onChangeText={setReturnConditions} />
@@ -466,8 +1130,8 @@ const styles = StyleSheet.create({
   modalCloseX: { fontSize: 20, fontWeight: '600', color: '#8e8e93', padding: 4 },
   locationOptionRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f2f2f7' },
   locationOptionText: { fontSize: 16, fontWeight: '600', color: '#333333' },
-  
-  // 🔍 Inner Search Bar Styles
+
+
   modalSearchWrapper: { paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e5e5ea', marginBottom: 6 },
   modalSearchInput: { width: '100%', height: 44, borderWidth: 1.5, borderColor: '#e0e0e0', borderRadius: 12, paddingHorizontal: 14, fontSize: 15, color: '#333333', backgroundColor: '#f2f2f7' },
   modalEmptyBox: { paddingVertical: 40, alignItems: 'center' },
