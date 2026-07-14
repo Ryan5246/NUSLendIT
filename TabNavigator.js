@@ -8,7 +8,6 @@ import DashboardScreen from './screens/DashboardScreen';
 import SearchScreen from './screens/SearchScreen';
 import PostScreen from './screens/PostScreen';
 import MapsScreen from './screens/MapsScreen';
-import VerifyScreen from './screens/VerifyScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -17,18 +16,6 @@ export default function TabNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        /*
-        headerStyle: {
-          backgroundColor: '#14004c',
-          borderBottomWidth: 1,
-          borderBottomColor: '#ffffff15'
-        },
-        headerTitleStyle: {
-          color: '#ffffff',
-          fontWeight: 'bold',
-          fontSize: 22
-        },
-        */
         tabBarStyle: {
           backgroundColor: '#14004c',
           borderTopWidth: 1,
@@ -127,23 +114,7 @@ export default function TabNavigator() {
           ),
         }}
       />
-
-      <Tab.Screen
-        name="Verify"
-        component={VerifyScreen}
-        options={{
-          title: 'Verify',
-          tabBarIcon: ({ focused }) => (
-            <Image
-              source={require('./assets/Verify.png')}
-              style={[
-                styles.tabImage,
-                { opacity: focused ? 1 : 0.6 },
-              ]}
-            />
-          ),
-        }}
-      />
+      {/* ✅ FIXED: Removed Verify tab item from this list completely */}
     </Tab.Navigator>
   );
 }

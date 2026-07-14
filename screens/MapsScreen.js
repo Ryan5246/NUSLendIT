@@ -12,14 +12,13 @@ import {
   Alert,
   StatusBar
 } from 'react-native';
-import MapView, { Marker, Callout, PROVIDER_GOOGLE } from 'react-native-maps'; 
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { db, auth } from '../firebaseConfig';
-import { collection, query, onSnapshot, where, getDocs, addDoc } from 'firebase/firestore';
-import { getCampusLocationLabel } from './PostScreen'; 
+import { collection, query, onSnapshot, where, getDocs, doc, addDoc } from 'firebase/firestore';
+import { getCampusLocationLabel } from './PostScreen';
 
 const { width, height } = Dimensions.get('window');
 
-// 📍 NUS Coordinates Registry Map compiled from map.nus.edu.sg positions
 export const CAMPUS_COORDINATES = {
   BIZ: { latitude: 1.2925, longitude: 103.7742 },
   CDE: { latitude: 1.3002, longitude: 103.7716 },
@@ -68,46 +67,62 @@ export const CAMPUS_COORDINATES = {
   ALUMNI_HOUSE: { latitude: 1.2928, longitude: 103.7738 }
 };
 
+function PeerRatingSummaryLabel({ userId }) {
+  const [stars, setStars] = useState('⭐ New');
+
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = onSnapshot(doc(db, 'username', userId), (userDoc) => {
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const avg = data.averageRating !== undefined ? data.averageRating.toFixed(1) : 'New';
+        const count = data.ratingCount || 0;
+        setStars(`⭐ ${avg} ${count > 0 ? `(${count})` : ''}`);
+      }
+    });
+    return () => unsubscribe();
+  }, [userId]);
+
+  return <Text style={styles.sheetRatingLabel}>{stars}</Text>;
+}
+
 export default function MapsScreen({ navigation }) {
   const [activeTab, setActiveTab] = useState('Request');
   const [searchQuery, setSearchQuery] = useState('');
   const [rawItems, setRawItems] = useState([]);
   const [locationsGroup, setLocationsGroup] = useState({});
   const [loading, setLoading] = useState(true);
-  const currentUserId = auth.currentUser?.uid;
+  const [selectedHubKey, setSelectedHubKey] = useState(null);
 
+  const currentUserId = auth.currentUser?.uid;
   const initialRegion = {
     latitude: 1.2972,
     longitude: 103.7772,
-    latitudeDelta: 0.015,  
-    longitudeDelta: 0.015, 
+    latitudeDelta: 0.015,
+    longitudeDelta: 0.015,
   };
 
-  // 📡 Real-time Firestore Stream Listener
   useEffect(() => {
     setLoading(true);
     const targetCollection = activeTab === 'Request' ? 'requests' : 'listings';
-    
-    const q = query(
-      collection(db, targetCollection), 
-      where("isDeleted", "==", false)
-    );
-    
+
+    const q = query(collection(db, targetCollection), where("isDeleted", "==", false));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const dataItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const peerItems = dataItems.filter(item => item.userId !== currentUserId);
-      
-      setRawItems(peerItems);
+      const peerActiveItems = dataItems.filter(item =>
+        item.userId !== currentUserId &&
+        item.status !== "finalized"
+      );
+      setRawItems(peerActiveItems);
       setLoading(false);
     }, (error) => {
-      console.error("Maps sync failure: ", error);
+      console.error(error);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [activeTab, currentUserId]);
 
-  // 🔍 Computes filtered items and packs them into location groups on state mutation
   useEffect(() => {
     const filtered = rawItems.filter(post => {
       const itemTitle = post.item ? post.item.toLowerCase() : '';
@@ -120,18 +135,15 @@ export default function MapsScreen({ navigation }) {
     const groups = {};
     filtered.forEach(item => {
       if (item.location && CAMPUS_COORDINATES[item.location]) {
-        if (!groups[item.location]) {
-          groups[item.location] = [];
-        }
+        if (!groups[item.location]) groups[item.location] = [];
         groups[item.location].push(item);
       }
     });
-
     setLocationsGroup(groups);
   }, [rawItems, searchQuery]);
 
-  // 💬 CHAT ROUTING SYSTEM: Initiates a text negotiation thread instantly upon tapping an item card
   const handleOpenItemChat = async (itemCard) => {
+    if (!itemCard) return;
     const itemOwnerId = itemCard.userId;
     if (!itemOwnerId || itemOwnerId === currentUserId) return;
 
@@ -155,7 +167,7 @@ export default function MapsScreen({ navigation }) {
           participants: [currentUserId, itemOwnerId],
           ownerId: itemOwnerId,
           listingType: activeTab === "List" ? "listing" : "request",
-          lastMessageText: "Room created via Campus Map! Start negotiating handoff details.",
+          lastMessageText: "Room created via Map! Start negotiating details.",
           lastMessageTimestamp: Date.now(),
         };
         const docRef = await addDoc(collection(db, 'chats'), newChatRoom);
@@ -170,50 +182,31 @@ export default function MapsScreen({ navigation }) {
           peerId: itemOwnerId,
           peerUsername: itemCard.username || 'unknown'
         },
-        initial: false 
+        initial: false
       });
-
     } catch (error) {
-      console.error("Map chat routing failed: ", error);
-      Alert.alert("Error", "Could not establish a secure chat session.");
+      Alert.alert("Error", "Could not establish secure chat session.");
     }
   };
+
+  const activeSheetItems = selectedHubKey ? (locationsGroup[selectedHubKey] || []) : [];
 
   return (
     <View style={styles.fullScreenContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
-      {/* Floating Header Controls Wrapper */}
       <View style={styles.floatingControlPanel}>
-        {/* 🔄 SWAPPED: Upper Mode Switch Selector is now at the very top */}
         <View style={styles.toggleContainer}>
-          <TouchableOpacity 
-            style={[styles.toggleButton, activeTab === 'Request' && styles.toggleButtonActive]} 
-            onPress={() => { setActiveTab('Request'); setSearchQuery(''); }}
-            activeOpacity={0.9}
-          >
+          <TouchableOpacity style={[styles.toggleButton, activeTab === 'Request' && styles.toggleButtonActive]} onPress={() => { setActiveTab('Request'); setSearchQuery(''); setSelectedHubKey(null); }} activeOpacity={0.9}>
             <Text style={[styles.toggleText, activeTab === 'Request' && styles.toggleTextActive]}>Requests Map</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.toggleButton, activeTab === 'List' && styles.toggleButtonActive]} 
-            onPress={() => { setActiveTab('List'); setSearchQuery(''); }}
-            activeOpacity={0.9}
-          >
+          <TouchableOpacity style={[styles.toggleButton, activeTab === 'List' && styles.toggleButtonActive]} onPress={() => { setActiveTab('List'); setSearchQuery(''); setSelectedHubKey(null); }} activeOpacity={0.9}>
             <Text style={[styles.toggleText, activeTab === 'List' && styles.toggleTextActive]}>Listings Map</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 🔄 SWAPPED: Dynamic Live Item Search Input Row is now underneath */}
         <View style={styles.searchBarBox}>
-          <TextInput
-            style={styles.mapSearchInput}
-            placeholder={activeTab === 'Request' ? "Search requests on map..." : "Search borrowable items nearby..."}
-            placeholderTextColor="#a0a0a0"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            clearButtonMode="while-editing"
-            autoCorrect={false}
-          />
+          <TextInput style={styles.mapSearchInput} placeholder={activeTab === 'Request' ? "Search requests on map..." : "Search borrowable items nearby..."} placeholderTextColor="#a0a0a0" value={searchQuery} onChangeText={setSearchQuery} clearButtonMode="while-editing" autoCorrect={false} />
         </View>
       </View>
 
@@ -224,72 +217,107 @@ export default function MapsScreen({ navigation }) {
         </View>
       )}
 
-      {/* Main Map Engine Element Canvas View */}
-      <MapView 
-        provider={PROVIDER_GOOGLE} 
-        style={styles.mapCanvas} 
-        initialRegion={initialRegion} 
+      <MapView
+        provider={PROVIDER_GOOGLE}
+        style={styles.mapCanvas}
+        initialRegion={initialRegion}
         showsUserLocation={true}
+        onPress={() => setSelectedHubKey(null)}
       >
-        {Object.keys(locationsGroup).map((locKey) => {
+        {Object.keys(CAMPUS_COORDINATES).map((locKey) => {
           const coordinates = CAMPUS_COORDINATES[locKey];
-          const postsInLocation = locationsGroup[locKey];
+          const postsInLocation = locationsGroup[locKey] || [];
           const postCount = postsInLocation.length;
 
-          if (postCount === 0) return null; 
+          if (postCount === 0) return null;
+
+          const isSelected = selectedHubKey === locKey;
 
           return (
             <Marker
-              key={locKey}
+
+              key={`${locKey}_amt:${postCount}_sel:${isSelected}`}
               coordinate={coordinates}
               tracksViewChanges={false}
+              onPress={(e) => {
+                e.stopPropagation();
+                setSelectedHubKey(locKey);
+              }}
             >
-              <View style={[styles.customPinBubble, activeTab === 'List' && styles.listingPinColor]}>
-                <Text style={styles.pinTextNumber}>{postCount}</Text>
-              </View>
+              <View style={styles.markerAnchorContainer}>
+                {isSelected && <View style={styles.orangeHaloRingContainer} />}
 
-              <Callout tooltip={true} style={styles.calloutWindowContainer}>
-                <View style={styles.calloutBubbleContent}>
-                  <Text style={styles.calloutHubHeader}>📍 {getCampusLocationLabel(locKey)}</Text>
-                  <Text style={styles.calloutSubCount}>{postCount} match{postCount === 1 ? '' : 'es'} found</Text>
-                  
-                  <ScrollView style={{ maxHeight: 180 }} showsVerticalScrollIndicator={true}>
-                    {postsInLocation.map((post) => (
-                      <TouchableOpacity 
-                        key={post.id} 
-                        style={styles.calloutItemCard}
-                        onPress={() => handleOpenItemChat(post)}
-                      >
-                        <Text style={styles.itemTitleText} numberOfLines={1}>
-                          {activeTab === 'Request' ? 'Need' : 'Offer'}: {post.item}
-                        </Text>
-                        <Text style={styles.itemMetaText}>
-                          {activeTab === 'Request' ? `Pay: $${post.willingToPay}` : `Rate: $${post.costPerDay}/d`}
-                        </Text>
-                        <Text style={styles.itemChatPromptText}>Tap to negotiate →</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                <View style={[
+                  styles.customPinBubble,
+                  activeTab === 'List' && styles.listingPinColor
+                ]}>
+                  <Text style={styles.pinTextNumber}>{postCount}</Text>
                 </View>
-                <View style={styles.calloutTrianglePointer} />
-              </Callout>
+              </View>
             </Marker>
           );
         })}
       </MapView>
+
+      {selectedHubKey && (
+        <View style={styles.bottomSheetContainer}>
+          <View style={styles.sheetHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sheetHubHeader}>📍 {getCampusLocationLabel(selectedHubKey)}</Text>
+              <Text style={styles.sheetSubCount}>
+                {activeSheetItems.length} active match{activeSheetItems.length === 1 ? '' : 'es'} filtered
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.closeSheetBtn} onPress={() => setSelectedHubKey(null)}>
+              <Text style={styles.closeSheetBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          {activeSheetItems.length === 0 ? (
+            <View style={styles.sheetEmptyBox}>
+              <Text style={styles.sheetEmptyText}>No items match your active search query at this hub.</Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.sheetScrollView}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {activeSheetItems.map((post) => (
+                <TouchableOpacity
+                  key={post.id}
+                  style={styles.sheetItemCard}
+                  onPress={() => handleOpenItemChat(post)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.itemCardTopLine}>
+                    <Text style={styles.itemTitleText} numberOfLines={1}>
+                      {activeTab === 'Request' ? 'Need' : 'Offer'}: {post.item}
+                    </Text>
+                    <Text style={styles.itemPriceText}>
+                      {activeTab === 'Request' ? `$${post.willingToPay}` : `$${post.costPerDay}/d`}
+                    </Text>
+                  </View>
+
+                  <View style={styles.itemCardMetaLine}>
+                    <Text style={styles.userHandleText}>@{post.username || 'student'}</Text>
+                    <PeerRatingSummaryLabel userId={post.userId} />
+                  </View>
+
+                  <Text style={styles.itemChatPromptText}>Tap to start negotiating →</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fullScreenContainer: { flex: 1, backgroundColor: '#ffffff' },
-  floatingControlPanel: { 
-    position: 'absolute', 
-    top: Platform.OS === 'ios' ? 58 : StatusBar.currentHeight + 14, 
-    left: 20, 
-    right: 20, 
-    zIndex: 10 
-  },
+  floatingControlPanel: { position: 'absolute', top: Platform.OS === 'ios' ? 58 : StatusBar.currentHeight + 14, left: 20, right: 20, zIndex: 10 },
   searchBarBox: { width: '100%', backgroundColor: '#ffffff', borderRadius: 14, height: 48, borderWidth: 1.5, borderColor: '#e5e5ea', paddingHorizontal: 14, justifyContent: 'center', marginTop: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   mapSearchInput: { fontSize: 15, color: '#333333', width: '100%', height: '100%' },
   toggleContainer: { flexDirection: 'row', backgroundColor: '#ffffff', borderRadius: 16, padding: 4, borderWidth: 1, borderColor: '#e5e5ea', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
@@ -300,16 +328,25 @@ const styles = StyleSheet.create({
   mapCanvas: { width: width, height: height },
   mapLoadingOverlay: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(255,255,255,0.7)', zIndex: 9, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 10, color: '#14004c', fontWeight: '700', fontSize: 15 },
+  markerAnchorContainer: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+  orangeHaloRingContainer: { position: 'absolute', width: 40, height: 40, borderRadius: 20, borderWidth: 3.5, borderColor: '#ffb300', backgroundColor: 'transparent' },
   customPinBubble: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#14004c', borderWidth: 2, borderColor: '#ffffff', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3, elevation: 4 },
   listingPinColor: { backgroundColor: '#2e2270' },
   pinTextNumber: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
-  calloutWindowContainer: { width: 240, backgroundColor: 'transparent', alignItems: 'center' },
-  calloutBubbleContent: { width: '100%', backgroundColor: '#ffffff', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#e5e5ea', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 4 },
-  calloutHubHeader: { fontSize: 14, fontWeight: '800', color: '#14004c', marginBottom: 2 },
-  calloutSubCount: { fontSize: 11, fontWeight: '600', color: '#8e8e93', marginBottom: 8, textTransform: 'uppercase' },
-  calloutTrianglePointer: { width: 0, height: 0, backgroundColor: 'transparent', borderStyle: 'solid', borderLeftWidth: 10, borderRightWidth: 10, borderTopWidth: 10, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: '#ffffff', marginTop: -1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 2 },
-  calloutItemCard: { backgroundColor: '#f2f2f7', padding: 8, borderRadius: 8, marginBottom: 6, borderWidth: 0.5, borderColor: '#e5e5ea' },
-  itemTitleText: { fontSize: 13, fontWeight: '700', color: '#222222' },
-  itemMetaText: { fontSize: 12, fontWeight: '600', color: '#555555', marginTop: 1 },
-  itemChatPromptText: { fontSize: 11, fontWeight: '700', color: '#14004c', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.3 }
-});
+  bottomSheetContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: height * 0.45, paddingHorizontal: 24, paddingVertical: 20, shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 20, zIndex: 20 },
+  sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f2f2f7', paddingBottom: 12, paddingRight: 8 },
+  sheetHubHeader: { fontSize: 18, fontWeight: '800', color: '#14004c' },
+  sheetSubCount: { fontSize: 12, fontWeight: '600', color: '#8e8e93', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
+  closeSheetBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#f2f2f7', justifyContent: 'center', alignItems: 'center' },
+  closeSheetBtnText: { fontSize: 13, fontWeight: '700', color: '#8e8e93' },
+  sheetScrollView: { width: '100%' },
+  sheetItemCard: { backgroundColor: '#f8f8fc', padding: 14, borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e5e5ea' },
+  itemTitleText: { fontSize: 15, fontWeight: '700', color: '#222222', flex: 1, paddingRight: 8 },
+  itemPriceText: { fontSize: 15, fontWeight: '800', color: '#14004c' },
+  itemCardMetaLine: { flexDirection: 'row', alignItems: 'center', marginTop: 6, marginBottom: 4 },
+  userHandleText: { fontSize: 13, fontWeight: '600', color: '#636366', marginRight: 10 },
+  sheetRatingLabel: { fontSize: 11, fontWeight: '700', color: '#ffb300', backgroundColor: '#fff9e6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, overflow: 'hidden' },
+  itemChatPromptText: { fontSize: 12, fontWeight: '700', color: '#14004c', marginTop: 8, textTransform: 'uppercase' },
+  sheetEmptyBox: { paddingVertical: 30, alignItems: 'center' },
+  sheetEmptyText: { fontSize: 14, color: '#8e8e93', textAlign: 'center', fontWeight: '500' }
+}); 

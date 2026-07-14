@@ -19,7 +19,7 @@ import { collection, query, where, onSnapshot, orderBy, doc, deleteDoc, updateDo
 
 export default function ProfileActivityScreen({ route, navigation }) {
   const { mode } = route.params || { mode: 'Your Posts' };
-  const [activeSubTab, setActiveSubTab] = useState('Request'); // Track inside 'Your Posts' sub-toggles
+  const [activeSubTab, setActiveSubTab] = useState('Request');
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const currentUserId = auth.currentUser?.uid;
@@ -30,7 +30,7 @@ export default function ProfileActivityScreen({ route, navigation }) {
   const [editLocation, setEditLocation] = useState('');
   const [editDeposit, setEditDeposit] = useState('');
   const [editPriceOrPay, setEditPriceOrPay] = useState('');
-  const [editExtraField, setEditExtraField] = useState(''); // description or returnConditions
+  const [editExtraField, setEditExtraField] = useState('');
 
   useEffect(() => {
     navigation.setOptions({ title: mode });
@@ -40,25 +40,51 @@ export default function ProfileActivityScreen({ route, navigation }) {
     if (!currentUserId) return;
 
     setLoading(true);
-    let unsubscribe = () => {};
+    let unsubscribe = () => { };
 
     if (mode === 'Your Posts') {
       const qRequests = query(collection(db, 'requests'), where('userId', '==', currentUserId));
       const qListings = query(collection(db, 'listings'), where('userId', '==', currentUserId));
+      const qTransactions = query(collection(db, 'transactions'));
 
       let localRequests = [];
       let localListings = [];
+      let txMap = {};
 
       const combineAndSort = () => {
-        const combined = activeSubTab === 'Request' ? localRequests : localListings;
-        combined.sort((a, b) => {
+        const rawCombined = activeSubTab === 'Request' ? localRequests : localListings;
+
+
+        const combinedWithStages = rawCombined.map(post => {
+          let liveStage = post.status || 'active';
+          if (txMap[post.id]) {
+            liveStage = txMap[post.id];
+          }
+          return { ...post, calculatedStage: liveStage };
+        });
+
+        combinedWithStages.sort((a, b) => {
           const tA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
           const tB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt || 0);
           return tB - tA;
         });
-        setData(combined);
+
+        setData(combinedWithStages);
         setLoading(false);
       };
+
+      // Set up a structural reactive snapshot mesh to evaluate post lock situations in real time
+      const unsubTx = onSnapshot(qTransactions, (txSnap) => {
+        txMap = {};
+        txSnap.forEach(d => {
+          const txData = d.data();
+          if (txData.chatId) {
+            // Match transaction track records using the common identifier token fields
+            txMap[txData.itemId] = txData.status;
+          }
+        });
+        combineAndSort();
+      });
 
       const unsubRequests = onSnapshot(qRequests, (snap) => {
         localRequests = snap.docs.map(doc => ({ id: doc.id, collectionType: 'requests', type: 'Request', ...doc.data() }));
@@ -71,6 +97,7 @@ export default function ProfileActivityScreen({ route, navigation }) {
       });
 
       unsubscribe = () => {
+        unsubTx();
         unsubRequests();
         unsubListings();
       };
@@ -79,7 +106,16 @@ export default function ProfileActivityScreen({ route, navigation }) {
       const qTransactions = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'));
       unsubscribe = onSnapshot(qTransactions, (snapshot) => {
         const allTrans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const filteredTrans = allTrans.filter(t => t.lenderId === currentUserId || t.borrowerId === currentUserId);
+
+        // ✅ REGULATION 2 FIXED: Only show OTHER people's posts you interact with, AND only AFTER handoff code verification (status passes "verifying")
+        const filteredTrans = allTrans.filter(t => {
+          const amParticipant = t.lenderId === currentUserId || t.borrowerId === currentUserId;
+          const isNotMyPost = t.ownerId !== currentUserId;
+          const isHandedOver = t.status !== "verifying"; // True only when item moves into active loan state or later
+
+          return amParticipant && isNotMyPost && isHandedOver;
+        });
+
         setData(filteredTrans);
         setLoading(false);
       });
@@ -99,24 +135,22 @@ export default function ProfileActivityScreen({ route, navigation }) {
           style: "destructive",
           onPress: async () => {
             try {
-              // 1. INSTANTLY UPDATE LOCAL UI STATE
-              setData(currentData => 
-                currentData.map(post => 
+              setData(currentData =>
+                currentData.map(post =>
                   post.id === postId ? { ...post, isDeleted: true } : post
                 )
               );
 
-              // 2. RUN THE BACKEND SOFT DELETE
               const postRef = doc(db, collectionType, postId);
               await updateDoc(postRef, {
                 isDeleted: true,
                 updatedAt: Date.now()
               });
-              
+
             } catch (error) {
               Alert.alert("Error", "Could not remove post at this time.");
-              setData(currentData => 
-                currentData.map(post => 
+              setData(currentData =>
+                currentData.map(post =>
                   post.id === postId ? { ...post, isDeleted: false } : post
                 )
               );
@@ -129,39 +163,36 @@ export default function ProfileActivityScreen({ route, navigation }) {
 
   const handleRepostPost = async (postId, collectionType) => {
     try {
-      // 1. INSTANTLY UPDATE LOCAL UI STATE
-      setData(currentData => 
-        currentData.map(post => 
+      setData(currentData =>
+        currentData.map(post =>
           post.id === postId ? { ...post, isDeleted: false } : post
         )
       );
 
-      // 2. RUN THE BACKEND RESTORE
       const postRef = doc(db, collectionType, postId);
       await updateDoc(postRef, {
         isDeleted: false,
-        createdAt: new Date(), 
+        createdAt: new Date(),
         updatedAt: Date.now()
       });
-      
+
       Alert.alert("Success", "Your post has been successfully reposted to the campus feed!");
     } catch (error) {
       Alert.alert("Error", "Could not repost this item at this time.");
-      setData(currentData => 
-        currentData.map(post => 
+      setData(currentData =>
+        currentData.map(post =>
           post.id === postId ? { ...post, isDeleted: true } : post
         )
       );
     }
   };
 
-  // Populate overlay configuration parameters locally
   const handleOpenEditModal = (item) => {
     setEditingPost(item);
     setEditItem(item.item || '');
     setEditLocation(item.location || '');
     setEditDeposit(item.deposit ? String(item.deposit) : '');
-    
+
     if (item.type === 'Request') {
       setEditPriceOrPay(item.willingToPay ? String(item.willingToPay) : '');
       setEditExtraField(item.description || '');
@@ -171,7 +202,6 @@ export default function ProfileActivityScreen({ route, navigation }) {
     }
   };
 
-  // Commit update values directly back to Firestore records
   const handleUpdatePost = async () => {
     if (!editItem.trim() || !editLocation.trim()) {
       Alert.alert("Validation Error", "Item description and campus location cannot be empty.");
@@ -204,16 +234,33 @@ export default function ProfileActivityScreen({ route, navigation }) {
     }
   };
 
+  const mapProgressStageText = (calculatedStage) => {
+    switch (calculatedStage) {
+      case 'active': return '🟢 Live on Campus Feed';
+      case 'finalized': return '🎯 Deal Partner Confirmed';
+      case 'verifying': return '🔐 Handoff Token Generated';
+      case 'pending': return '📦 Item Out on Loan';
+      case 'returning': return '🔄 Return Verification in Progress';
+      case 'returned': return '★ Complete (Awaiting Reviews)';
+      case 'completed': return '✅ Closed & Archived';
+      default: return '🔄 Processing Step';
+    }
+  };
+
   const renderItem = ({ item }) => {
     if (mode === 'Your Posts') {
       const isRequest = item.type === 'Request';
       const isSoftDeleted = item.isDeleted === true;
 
+      // ✅ REGULATION 1 FIXED: Explicit layout boundary locks if item status moves past absolute active phase
+      const isExchangeActive = item.status === 'finalized' || (item.calculatedStage && item.calculatedStage !== 'active');
+
       return (
         <View style={[
-          styles.card, 
+          styles.card,
           !isRequest && styles.listingCard,
-          isSoftDeleted && styles.deletedCard
+          isSoftDeleted && styles.deletedCard,
+          isExchangeActive && styles.lockedProgressCard
         ]}>
           <View style={styles.cardHeader}>
             <Text style={[styles.cardTitle, isSoftDeleted && styles.disabledText]}>
@@ -223,10 +270,10 @@ export default function ProfileActivityScreen({ route, navigation }) {
               ${isRequest ? item.willingToPay : `${item.costPerDay}/day`}
             </Text>
           </View>
-          
+
           <Text style={[styles.cardRow, isSoftDeleted && styles.disabledText]}>📍 Location: <Text style={styles.cardValue}>{item.location}</Text></Text>
           <Text style={[styles.cardRow, isSoftDeleted && styles.disabledText]}>🏦 Security Deposit: <Text style={styles.cardValue}>${item.deposit}</Text></Text>
-          
+
           {isRequest ? (
             <>
               <Text style={[styles.cardRow, isSoftDeleted && styles.disabledText]}>
@@ -242,10 +289,15 @@ export default function ProfileActivityScreen({ route, navigation }) {
             </Text>
           )}
 
-          {/* Conditional Layout Row State Configuration Toggles */}
+          {/* Dynamic Workflow Status String Renderer */}
+          <View style={styles.lifecycleStatusBadgeBox}>
+            <Text style={styles.lifecycleStatusBadgeText}>{mapProgressStageText(item.calculatedStage)}</Text>
+          </View>
+
+          {/* Conditional Layout Action Dispatches */}
           {isSoftDeleted ? (
             <View style={styles.buttonActionRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.actionButton, styles.repostButton]}
                 onPress={() => handleRepostPost(item.id, item.collectionType)}
                 activeOpacity={0.7}
@@ -253,9 +305,14 @@ export default function ProfileActivityScreen({ route, navigation }) {
                 <Text style={styles.btnText}>Repost</Text>
               </TouchableOpacity>
             </View>
+          ) : isExchangeActive ? (
+            // ✅ REGULATION 1 FIXED: Remove edit/delete access wrappers completely if item status enters active loan loops
+            <View style={styles.lockedWarningBox}>
+              <Text style={styles.lockedWarningLabelText}>🔒 Modification controls locked while exchange cycle is active.</Text>
+            </View>
           ) : (
             <View style={styles.buttonActionRow}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.actionButton, styles.editButton]}
                 onPress={() => handleOpenEditModal(item)}
                 activeOpacity={0.7}
@@ -263,7 +320,7 @@ export default function ProfileActivityScreen({ route, navigation }) {
                 <Text style={styles.btnText}>Edit Post</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.actionButton, styles.deleteButton]}
                 onPress={() => handleDeletePost(item.id, item.collectionType, item.item)}
                 activeOpacity={0.7}
@@ -276,19 +333,20 @@ export default function ProfileActivityScreen({ route, navigation }) {
       );
     } else {
       const isLender = item.lenderId === currentUserId;
-      const displayStatus = item.status ? item.status.toUpperCase() : 'PENDING';
       return (
-        <View style={styles.card}>
+        <View style={[styles.card, styles.transactionCardColorLayout]}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>📦 {item.itemTitle || 'Marketplace Item'}</Text>
-            <Text style={[styles.statusBadge, { backgroundColor: item.status === 'completed' ? '#28a745' : '#ffc107' }]}>
-              {displayStatus}
+            <Text style={[styles.statusBadge, { backgroundColor: item.status === 'completed' ? '#00875a' : '#ffb300' }]}>
+              {item.status ? item.status.toUpperCase() : 'ACTIVE'}
             </Text>
           </View>
-          <Text style={styles.cardRow}>Your Role: <Text style={styles.cardValue}>{isLender ? 'Lender' : 'Borrower'}</Text></Text>
-          <TouchableOpacity style={styles.actionLink} onPress={() => navigation.navigate('Verify')}>
-            <Text style={styles.actionLinkText}>Open Verification Portal →</Text>
-          </TouchableOpacity>
+          <Text style={styles.cardRow}>Your Role: <Text style={styles.cardValue}>{isLender ? 'Lender (Item Owner)' : 'Borrower'}</Text></Text>
+
+          <View style={[styles.lifecycleStatusBadgeBox, { marginTop: 10 }]}>
+            <Text style={styles.lifecycleStatusBadgeText}>{mapProgressStageText(item.status)}</Text>
+          </View>
+          {/* ✅ FIXED: Removed old verification text links completely from layout rendering outputs */}
         </View>
       );
     }
@@ -299,14 +357,14 @@ export default function ProfileActivityScreen({ route, navigation }) {
       {mode === 'Your Posts' && (
         <View style={styles.toggleWrapper}>
           <View style={styles.toggleContainer}>
-            <TouchableOpacity 
-              style={[styles.toggleButton, activeSubTab === 'Request' && styles.toggleButtonActive]} 
+            <TouchableOpacity
+              style={[styles.toggleButton, activeSubTab === 'Request' && styles.toggleButtonActive]}
               onPress={() => setActiveSubTab('Request')}
             >
               <Text style={[styles.toggleText, activeSubTab === 'Request' && styles.toggleTextActive]}>Requests</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.toggleButton, activeSubTab === 'Listing' && styles.toggleButtonActive]} 
+            <TouchableOpacity
+              style={[styles.toggleButton, activeSubTab === 'Listing' && styles.toggleButtonActive]}
               onPress={() => setActiveSubTab('Listing')}
             >
               <Text style={[styles.toggleText, activeSubTab === 'Listing' && styles.toggleTextActive]}>Listings</Text>
@@ -331,7 +389,6 @@ export default function ProfileActivityScreen({ route, navigation }) {
         />
       )}
 
-      {/* Slide-Up Inline Modification Modal Sheet Container */}
       <Modal
         visible={editingPost !== null}
         animationType="slide"
@@ -420,23 +477,25 @@ const styles = StyleSheet.create({
   toggleButtonActive: { backgroundColor: '#14004c' },
   toggleText: { fontSize: 15, fontWeight: '700', color: '#636366' },
   toggleTextActive: { color: '#ffffff' },
-  
-  // Premium, High-Contrast Original Card Archetypes
+
   card: { width: '100%', backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#e5e5ea', borderRadius: 20, padding: 18, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   listingCard: { borderColor: '#2e227025' },
   deletedCard: { backgroundColor: '#f2f2f7', borderColor: '#d1d1d6', borderStyle: 'dashed' },
-  
+  lockedProgressCard: { backgroundColor: '#f9f9fc', borderColor: '#14004c25' },
+  transactionCardColorLayout: { backgroundColor: '#fafdfb', borderColor: '#00875a25' },
+
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle: { fontSize: 19, fontWeight: 'bold', color: '#14004c', flex: 1, paddingRight: 10 },
-  cardPrice: { fontSize: 19, fontWeight: 'bold', color: '#14004c' },
-  statusBadge: { fontSize: 12, fontWeight: 'bold', color: '#ffffff', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  cardTitle: { fontSize: 17, fontWeight: 'bold', color: '#14004c', flex: 1, paddingRight: 10 },
+  cardPrice: { fontSize: 17, fontWeight: 'bold', color: '#14004c' },
+  statusBadge: { fontSize: 11, fontWeight: '700', color: '#ffffff', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, textTransform: 'uppercase' },
   cardRow: { fontSize: 14, fontWeight: '700', color: '#555555', marginBottom: 6, lineHeight: 20 },
   cardValue: { fontWeight: '500', color: '#222222' },
-  actionLink: { marginTop: 10, alignSelf: 'flex-start' },
-  actionLinkText: { color: '#14004c', fontWeight: 'bold', fontSize: 14 },
   disabledText: { color: '#8e8e93' },
-  
-  // High-Contrast Solid UI Button Row Design
+
+  // Progress lifecycle badge design definitions
+  lifecycleStatusBadgeBox: { backgroundColor: '#f0f0f5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start', marginTop: 8 },
+  lifecycleStatusBadgeText: { fontSize: 12, fontWeight: '700', color: '#14004c' },
+
   buttonActionRow: { flexDirection: 'row', marginTop: 16, width: '100%' },
   actionButton: { flex: 1, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
   editButton: { backgroundColor: '#2e2270', marginLeft: 0 },
@@ -445,7 +504,10 @@ const styles = StyleSheet.create({
   btnText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
   emptyText: { color: '#8e8e93', fontSize: 16, textAlign: 'center' },
 
-  // Slide-Up Modification Sheet Theme Settings
+  // Locked notice text labels box parameters
+  lockedWarningBox: { width: '100%', paddingVertical: 10, backgroundColor: '#f2f2f7', borderRadius: 10, marginTop: 14, alignItems: 'center', justifyContent: 'center' },
+  lockedWarningLabelText: { fontStyle: 'italic', color: '#636366', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.4)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#ffffff', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingBottom: 34, maxHeight: '85%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20, borderBottomWidth: 1, borderColor: '#e5e5ea' },
