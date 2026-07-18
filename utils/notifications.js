@@ -2,6 +2,8 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
 
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -21,7 +23,6 @@ export async function registerForPushNotificationsAsync() {
             return null;
         }
 
-        // Android notification channels
         if (Platform.OS === 'android') {
             await Notifications.setNotificationChannelAsync(
                 'default',
@@ -96,12 +97,41 @@ export async function registerForPushNotificationsAsync() {
                 projectId,
             });
 
+        const expoPushToken = tokenData.data;
+
         console.log(
             'Expo push token:',
-            tokenData.data
+            expoPushToken
         );
 
-        return tokenData.data;
+        const currentUser = auth.currentUser;
+
+        if (!currentUser) {
+            console.log(
+                'No logged-in user. Token was not saved.'
+            );
+
+            return expoPushToken;
+        }
+
+        await setDoc(
+            doc(db, 'username', currentUser.uid),
+            {
+                expoPushToken: expoPushToken,
+                notificationTokenUpdatedAt:
+                    new Date().toISOString(),
+            },
+            {
+                merge: true,
+            }
+        );
+
+        console.log(
+            'Expo push token saved under username/',
+            currentUser.uid
+        );
+
+        return expoPushToken;
     } catch (error) {
         console.error(
             'Push notification registration failed:',

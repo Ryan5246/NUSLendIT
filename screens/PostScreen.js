@@ -102,7 +102,11 @@ const formatDateString = (date) => {
   return `${day}/${month}/${year}`;
 };
 
-const NEARBY_RADIUS_KM = 1.5;
+const TEST_NOTIFICATION_MODE = true;
+
+const NEARBY_RADIUS_KM = TEST_NOTIFICATION_MODE
+  ? 10000
+  : 1.5;
 
 const CAMPUS_COORDINATES = {
   BIZ: { latitude: 1.2925, longitude: 103.7742 },
@@ -325,13 +329,17 @@ const notifyNearbyListingOwners = async ({
         continue;
       }
 
-      const distanceKm =
-        calculateDistanceKm(
-          requestCoordinates,
-          listingCoordinates
-        );
+      const distanceKm = calculateDistanceKm(
+        requestCoordinates,
+        listingCoordinates
+      );
 
-      if (distanceKm > NEARBY_RADIUS_KM) {
+      console.log("Request location:", requestData.location);
+      console.log("Listing location:", listingData.location);
+      console.log("Calculated distance:", distanceKm);
+
+      if (!TEST_NOTIFICATION_MODE && distanceKm > NEARBY_RADIUS_KM) {
+        console.log("Listing skipped because it is too far");
         continue;
       }
 
@@ -358,12 +366,17 @@ const notifyNearbyListingOwners = async ({
       const ownerProfile =
         ownerProfileSnapshot.data();
 
-      const token =
-        ownerProfile.expoPushToken;
+      const token = ownerProfile.expoPushToken;
+
+      console.log("Listing owner:", ownerId);
+      console.log("Owner Expo token:", token);
 
       if (!isValidExpoPushToken(token)) {
+        console.log("Notification skipped: invalid or missing Expo token");
         continue;
       }
+
+      console.log("Valid Expo token found");
 
       notificationMessages.push({
         to: token,
@@ -389,9 +402,9 @@ const notifyNearbyListingOwners = async ({
       });
     }
 
-    return await sendExpoPushMessages(
-      notificationMessages
-    );
+    console.log("Notifications being sent:", notificationMessages);
+
+    return await sendExpoPushMessages(notificationMessages);
   } catch (error) {
     console.error(
       'Nearby notification failed:',
