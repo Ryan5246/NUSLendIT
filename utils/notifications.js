@@ -34,6 +34,18 @@ export async function registerForPushNotificationsAsync() {
                     sound: 'default',
                 }
             );
+            await Notifications.setNotificationChannelAsync(
+                'chat-messages',
+                {
+                    name: 'Chat Messages',
+                    description:
+                        'Notifications when another student sends you a chat message.',
+                    importance:
+                        Notifications.AndroidImportance.HIGH,
+                    vibrationPattern: [0, 250, 250, 250],
+                    sound: 'default',
+                }
+            );
 
             await Notifications.setNotificationChannelAsync(
                 'nearby-requests',

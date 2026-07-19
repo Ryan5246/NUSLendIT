@@ -29,7 +29,36 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
+const isValidExpoPushToken = (token) => {
+  return (
+    typeof token === 'string' &&
+    (
+      token.startsWith('ExponentPushToken[') ||
+      token.startsWith('ExpoPushToken[')
+    )
+  );
+};
 
+const sendExpoPushMessage = async (message) => {
+  const response = await fetch(
+    'https://exp.host/--/api/v2/push/send',
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(message)
+    }
+  );
+
+  const responseData = await response.json();
+
+  if (!response.ok) {
+    console.error('Chat notification error:', responseData);
+  }
+};
 export default function ChatScreen({ route, navigation }) {
   const chatId = route.params?.chatId || route.params?.params?.chatId;
   const itemTitle = route.params?.itemTitle || route.params?.params?.itemTitle || 'Item';
@@ -493,6 +522,34 @@ export default function ChatScreen({ route, navigation }) {
       setInputText('');
       await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId: currentUserId, text: cleanMsg, createdAt: serverTimestamp() });
       await updateDoc(doc(db, 'chats', chatId), { lastMessageText: cleanMsg, lastMessageTimestamp: Date.now() });
+
+      const recipientProfileSnapshot = await getDoc(doc(db, 'username', peerId));
+      const recipientProfile = recipientProfileSnapshot.exists()
+        ? recipientProfileSnapshot.data()
+        : null;
+      const recipientPushToken = recipientProfile?.expoPushToken;
+
+      if (isValidExpoPushToken(recipientPushToken)) {
+        const senderProfileSnapshot = await getDoc(doc(db, 'username', currentUserId));
+        const senderProfile = senderProfileSnapshot.exists()
+          ? senderProfileSnapshot.data()
+          : null;
+
+        await sendExpoPushMessage({
+          to: recipientPushToken,
+          sound: 'default',
+          priority: 'high',
+          channelId: 'chat-messages',
+          title: `New message from @${senderProfile?.username || 'student'}`,
+          body: cleanMsg,
+          data: {
+            type: 'chat_message',
+            chatId,
+            peerId: currentUserId,
+            itemTitle
+          }
+        });
+      }
     } catch (error) {
       console.error(error);
     }

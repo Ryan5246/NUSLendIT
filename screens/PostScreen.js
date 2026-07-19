@@ -102,11 +102,6 @@ const formatDateString = (date) => {
   return `${day}/${month}/${year}`;
 };
 
-const TEST_NOTIFICATION_MODE = true;
-
-const NEARBY_RADIUS_KM = TEST_NOTIFICATION_MODE
-  ? 10000
-  : 1.5;
 
 const CAMPUS_COORDINATES = {
   BIZ: { latitude: 1.2925, longitude: 103.7742 },
@@ -154,40 +149,6 @@ const CAMPUS_COORDINATES = {
   I3_BUILDING: { latitude: 1.2932, longitude: 103.7766 },
   VENTUS: { latitude: 1.2961, longitude: 103.7718 },
   ALUMNI_HOUSE: { latitude: 1.2928, longitude: 103.7738 }
-};
-
-const toRadians = (degrees) => {
-  return degrees * Math.PI / 180;
-};
-
-const calculateDistanceKm = (pointA, pointB) => {
-  const earthRadiusKm = 6371;
-
-  const latitudeDifference = toRadians(
-    pointB.latitude - pointA.latitude
-  );
-
-  const longitudeDifference = toRadians(
-    pointB.longitude - pointA.longitude
-  );
-
-  const firstLatitude = toRadians(pointA.latitude);
-  const secondLatitude = toRadians(pointB.latitude);
-
-  const value =
-    Math.sin(latitudeDifference / 2) ** 2 +
-    Math.cos(firstLatitude) *
-    Math.cos(secondLatitude) *
-    Math.sin(longitudeDifference / 2) ** 2;
-
-  const angularDistance =
-    2 *
-    Math.atan2(
-      Math.sqrt(value),
-      Math.sqrt(1 - value)
-    );
-
-  return earthRadiusKm * angularDistance;
 };
 
 const normaliseItemName = (value) => {
@@ -322,31 +283,14 @@ const notifyNearbyListingOwners = async ({
         continue;
       }
 
-      const listingCoordinates =
-        CAMPUS_COORDINATES[listing.location];
-
-      if (!listingCoordinates) {
-        continue;
-      }
-
-      const distanceKm = calculateDistanceKm(
-        requestCoordinates,
-        listingCoordinates
-      );
-
-      console.log("Request location:", requestLocation);
-      console.log("Listing location:", listing.location);
-      console.log("Calculated distance:", distanceKm);
-
-      if (!TEST_NOTIFICATION_MODE && distanceKm > NEARBY_RADIUS_KM) {
-        console.log("Listing skipped because it is too far");
+      if (listing.location !== requestLocation) {
         continue;
       }
 
       if (!matchingOwners.has(listing.userId)) {
         matchingOwners.set(listing.userId, {
           listingId: listingDoc.id,
-          distanceKm
+          location: requestLocation
         });
       }
     }
@@ -389,8 +333,7 @@ const notifyNearbyListingOwners = async ({
 
         body:
           `@${requesterUsername || 'student'} needs ` +
-          `${requestedItem} about ` +
-          `${match.distanceKm.toFixed(1)} km from your listing.`,
+          `${requestedItem} at ${match.location}.`,
 
         data: {
           type: 'nearby_item_request',
