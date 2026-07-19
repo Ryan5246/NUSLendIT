@@ -334,8 +334,8 @@ const notifyNearbyListingOwners = async ({
         listingCoordinates
       );
 
-      console.log("Request location:", requestData.location);
-      console.log("Listing location:", listingData.location);
+      console.log("Request location:", requestLocation);
+      console.log("Listing location:", listing.location);
       console.log("Calculated distance:", distanceKm);
 
       if (!TEST_NOTIFICATION_MODE && distanceKm > NEARBY_RADIUS_KM) {
