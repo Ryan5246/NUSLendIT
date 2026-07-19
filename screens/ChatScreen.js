@@ -546,6 +546,7 @@ export default function ChatScreen({ route, navigation }) {
             type: 'chat_message',
             chatId,
             peerId: currentUserId,
+            peerUsername: senderProfile?.username || 'student',
             itemTitle
           }
         });
