@@ -31,62 +31,58 @@ import {
 
 
 export const NUS_CAMPUS_HUBS = [
-  { label: "BIZ - NUS Business School (Mochtar Riady Bldg / Biz 1 / Biz 2)", value: "BIZ" },
-  { label: "CDE - College of Design and Engineering (EA / E1 - E5 / EW1)", value: "CDE" },
-  { label: "COM - School of Computing (COM 1 / COM 2)", value: "SOC" },
-  { label: "FASS - Faculty of Arts & Social Sciences (The Deck / AS1 - AS7)", value: "FASS" },
-  { label: "FoS - Faculty of Science (The Frontier / S1 - S17 Cluster)", value: "FoS" },
-  { label: "LAW - Faculty of Law (Bukit Timah Campus)", value: "LAW" },
-  { label: "MED - Yong Loo Lin School of Medicine (MD1 - MD11 Cluster)", value: "MED" },
-  { label: "SDE - School of Design and Environment (SDE 1 / SDE 2 / SDE 3)", value: "SDE" },
-  { label: "Duke-NUS Medical School (Outram Campus)", value: "DUKE_NUS" },
-  { label: "LKYSPP - Lee Kuan Yew School of Public Policy", value: "LKYSPP" },
-  { label: "NUSC - NUS College (Cinnamon College / UTown)", value: "NUSC" },
+  { label: "BIZ - NUS Business School", value: "BIZ" },
+  { label: "CDE - College of Design and Engineering", value: "CDE" },
+  { label: "COM - School of Computing", value: "SOC" },
+  { label: "FASS - Faculty of Arts & Social Sciences", value: "FASS" },
+  { label: "FoS - Faculty of Science", value: "FoS" },
+  { label: "MED - Yong Loo Lin School of Medicine", value: "MED" },
+  { label: "SDE - School of Design and Environment", value: "SDE" },
   { label: "YST - Yong Siew Toh Conservatory of Music", value: "YST_MUSIC" },
 
 
-  { label: "Central Library (CL / CL Annexe)", value: "CENTRAL_LIBRARY" },
-  { label: "YIH - Yusof Ishak House (Student Union / Co-op / Starbucks)", value: "YIH" },
-  { label: "UTown - Stephen Riady Centre (SRC)", value: "SRC_UTOWN" },
-  { label: "UTown - Education Resource Centre (ERC)", value: "ERC_UTOWN" },
-  { label: "UTown - Town Plaza (Koufu / Subway Plaza)", value: "PLAZA_UTOWN" },
-  { label: "UCC - University Cultural Centre / Museum Area", value: "UCC" },
-  { label: "UHALL - University Hall Cluster", value: "UHALL" },
-  { label: "MPSH - Multi-Purpose Sports Halls (MPSH 1 - MPSH 6)", value: "MPSH" },
-  { label: "NUH - National University Hospital (Kent Ridge Wing / Medical Centre)", value: "NUH" },
+  { label: "CLB - Central Library", value: "CENTRAL_LIBRARY" },
+  { label: "YIH - Yusof Ishak House", value: "YIH" },
+  { label: "USC - University Sports Centre", value: "USC" },
+  { label: "SRC - Stephen Riady Centre", value: "SRC_UTOWN" },
+  { label: "ERC - Education Resource Centre", value: "ERC_UTOWN" },
+  { label: "UCC - University Cultural Centre / Museum", value: "UCC" },
+  { label: "UHALL - University Hall", value: "UHALL" },
+  { label: "MPSH - Multi-Purpose Sports Halls", value: "MPSH" },
+  { label: "NUH - National University Hospital", value: "NUH" },
+  { label: "NUS Field", value: "Field" },
 
 
-  { label: "Kent Ridge MRT Station (CC24)", value: "KR_MRT" },
+  { label: "Kent Ridge MRT Station", value: "KR_MRT" },
   { label: "Kent Ridge Bus Terminal", value: "KR_TERMINAL" },
 
 
-  { label: "Halls: Eusoff Hall", value: "EUSOFF_HALL" },
-  { label: "Halls: Kent Ridge Hall", value: "KR_HALL" },
-  { label: "Halls: King Edward VII Hall", value: "KEVII_HALL" },
-  { label: "Halls: Raffles Hall", value: "RAFFLES_HALL" },
-  { label: "Halls: Sheares Hall", value: "SHEARES_HALL" },
-  { label: "Halls: Temasek Hall", value: "TEMASEK_HALL" },
+  { label: "Eusoff Hall", value: "EUSOFF_HALL" },
+  { label: "Kent Ridge Hall", value: "KR_HALL" },
+  { label: "King Edward VII Hall", value: "KEVII_HALL" },
+  { label: "Raffles Hall", value: "RAFFLES_HALL" },
+  { label: "Sheares Hall", value: "SHEARES_HALL" },
+  { label: "Temasek Hall", value: "TEMASEK_HALL" },
 
 
-  { label: "Residences: Prince George's Park Residences (PGPR)", value: "PGPR" },
-  { label: "Residences: Pioneer House", value: "PIONEER_HOUSE" },
-  { label: "Residences: Valour House", value: "VALOUR_HOUSE" },
-  { label: "Houses: Helix House", value: "HELIX_HOUSE" },
-  { label: "Houses: LightHouse", value: "LIGHTHOUSE" },
+  { label: "PGPR - Prince George's Park Residences", value: "PGPR" },
+  { label: "Pioneer House", value: "PIONEER_HOUSE" },
+  { label: "Valour House", value: "VALOUR_HOUSE" },
+  { label: "Helix House", value: "HELIX_HOUSE" },
+  { label: "Light House", value: "LIGHTHOUSE" },
 
 
-  { label: "RCs: Cinnamon College (USP)", value: "CINNAMON_RC" },
-  { label: "RCs: College of Alice & Peter Tan (CAPT)", value: "CAPT_RC" },
-  { label: "RCs: Residential College 4 (RC4)", value: "RC4_RC" },
-  { label: "RCs: Tembusu College", value: "TEMBUSU_RC" },
-  { label: "RCs: Ridge View Residential College (RVRC)", value: "RVRC_RC" },
-  { label: "Grad: UTown Residence (North Tower / South Tower)", value: "UTOWN_RES" },
-  { label: "Grad: Kent Vale Staff Residences", value: "KENT_VALE" },
+  { label: "NUSC - NUS College", value: "NUSC" },
+  { label: "CAPT - College of Alice & Peter Tan", value: "CAPT_RC" },
+  { label: "RC4 - Residential College 4", value: "RC4_RC" },
+  { label: "RVRC - Ridge View Residential College", value: "RVRC_RC" },
+  { label: "UTR - UTown Residence", value: "UTOWN_RES" },
+  { label: "Tembusu College", value: "TEMBUSU_RC" },
 
 
-  { label: "TCOMS (Technology Centre for Offshore and Marine, Singapore)", value: "TCOMS" },
+  { label: "TCOMS - Technology Centre for Offshore and Marine, Singapore", value: "TCOMS" },
   { label: "I3 Building (Innovation 4.0)", value: "I3_BUILDING" },
-  { label: "Ventus (University Campus Infrastructure Building)", value: "VENTUS" },
+  { label: "Ventus", value: "VENTUS" },
   { label: "Shaw Foundation Alumni House / NUSS Guild House", value: "ALUMNI_HOUSE" }
 ];
 
@@ -103,52 +99,71 @@ const formatDateString = (date) => {
 };
 
 
-const CAMPUS_COORDINATES = {
-  BIZ: { latitude: 1.2925, longitude: 103.7742 },
-  CDE: { latitude: 1.3002, longitude: 103.7716 },
-  SOC: { latitude: 1.2945, longitude: 103.7741 },
-  FASS: { latitude: 1.2979, longitude: 103.7728 },
-  FoS: { latitude: 1.2968, longitude: 103.7801 },
-  LAW: { latitude: 1.3190, longitude: 103.8181 },
-  MED: { latitude: 1.2938, longitude: 103.7832 },
-  SDE: { latitude: 1.2995, longitude: 103.7702 },
-  DUKE_NUS: { latitude: 1.2801, longitude: 103.8344 },
-  LKYSPP: { latitude: 1.3198, longitude: 103.8175 },
-  NUSC: { latitude: 1.3055, longitude: 103.7725 },
-  YST_MUSIC: { latitude: 1.3015, longitude: 103.7738 },
-  CENTRAL_LIBRARY: { latitude: 1.2965, longitude: 103.7726 },
-  YIH: { latitude: 1.2991, longitude: 103.7747 },
-  SRC_UTOWN: { latitude: 1.3048, longitude: 103.7733 },
-  ERC_UTOWN: { latitude: 1.3059, longitude: 103.7721 },
-  PLAZA_UTOWN: { latitude: 1.3051, longitude: 103.7727 },
-  UCC: { latitude: 1.3012, longitude: 103.7724 },
-  UHALL: { latitude: 1.2994, longitude: 103.7719 },
-  MPSH: { latitude: 1.2998, longitude: 103.7761 },
-  NUH: { latitude: 1.2942, longitude: 103.7839 },
-  KR_MRT: { latitude: 1.2931, longitude: 103.7852 },
-  KR_TERMINAL: { latitude: 1.2937, longitude: 103.7699 },
-  EUSOFF_HALL: { latitude: 1.2946, longitude: 103.7705 },
-  KR_HALL: { latitude: 1.2934, longitude: 103.7792 },
-  KEVII_HALL: { latitude: 1.2917, longitude: 103.7818 },
-  RAFFLES_HALL: { latitude: 1.3005, longitude: 103.7739 },
-  SHEARES_HALL: { latitude: 1.2922, longitude: 103.7788 },
-  TEMASEK_HALL: { latitude: 1.2928, longitude: 103.7781 },
-  PGPR: { latitude: 1.2905, longitude: 103.7812 },
-  PIONEER_HOUSE: { latitude: 1.2909, longitude: 103.7806 },
-  VALOUR_HOUSE: { latitude: 1.2912, longitude: 103.7809 },
-  HELIX_HOUSE: { latitude: 1.2918, longitude: 103.7803 },
-  LIGHTHOUSE: { latitude: 1.2931, longitude: 103.7709 },
-  CINNAMON_RC: { latitude: 1.3054, longitude: 103.7726 },
-  CAPT_RC: { latitude: 1.3065, longitude: 103.7734 },
-  RC4_RC: { latitude: 1.3068, longitude: 103.7741 },
-  TEMBUSU_RC: { latitude: 1.3062, longitude: 103.7748 },
-  RVRC_RC: { latitude: 1.3011, longitude: 103.7782 },
-  UTOWN_RES: { latitude: 1.3061, longitude: 103.7718 },
-  KENT_VALE: { latitude: 1.3025, longitude: 103.7681 },
-  TCOMS: { latitude: 1.2974, longitude: 103.7779 },
-  I3_BUILDING: { latitude: 1.2932, longitude: 103.7766 },
-  VENTUS: { latitude: 1.2961, longitude: 103.7718 },
-  ALUMNI_HOUSE: { latitude: 1.2928, longitude: 103.7738 }
+export const CAMPUS_COORDINATES = {
+  BIZ: { latitude: 1.2925, longitude: 103.7742 }, //done
+  CDE: { latitude: 1.2990, longitude: 103.7719 }, //
+  SOC: { latitude: 1.2945, longitude: 103.7741 },//
+  FASS: { latitude: 1.2942, longitude: 103.7713 },//
+  FoS: { latitude: 1.2968, longitude: 103.7801 },//
+  USC: { latitude: 1.2995, longitude: 103.7755 },//
+  MED: { latitude: 1.2965, longitude: 103.7818 },//
+  SDE: { latitude: 1.2973, longitude: 103.7707 },//
+  Field: { latitude: 1.2987, longitude: 103.7783 },//
+  NUSC: { latitude: 1.3069, longitude: 103.7720 },//
+  YST_MUSIC: { latitude: 1.3020, longitude: 103.7730 },//
+  CENTRAL_LIBRARY: { latitude: 1.2965, longitude: 103.7731 },//
+  YIH: { latitude: 1.2985, longitude: 103.7750 },//
+  SRC_UTOWN: { latitude: 1.3044, longitude: 103.7725 },//
+  ERC_UTOWN: { latitude: 1.3057, longitude: 103.7727 },//
+  UCC: { latitude: 1.3015, longitude: 103.772 },//
+  UHALL: { latitude: 1.2972, longitude: 103.7779 },//
+  MPSH: { latitude: 1.3003, longitude: 103.7761 },//
+  NUH: { latitude: 1.2937, longitude: 103.7832 },//
+  KR_MRT: { latitude: 1.2931, longitude: 103.7845 },//
+  KR_TERMINAL: { latitude: 1.2942, longitude: 103.7696 },//
+  EUSOFF_HALL: { latitude: 1.2930, longitude: 103.7703 },//
+  KR_HALL: { latitude: 1.2915, longitude: 103.7746 },//
+  KEVII_HALL: { latitude: 1.2921, longitude: 103.7809 },//
+  RAFFLES_HALL: { latitude: 1.2995, longitude: 103.7739 },//
+  SHEARES_HALL: { latitude: 1.2911, longitude: 103.7756 },//
+  TEMASEK_HALL: { latitude: 1.2925, longitude: 103.7713 },//
+  PGPR: { latitude: 1.2903, longitude: 103.7806 },//
+  PIONEER_HOUSE: { latitude: 1.2908, longitude: 103.7803 },//
+  VALOUR_HOUSE: { latitude: 1.3005, longitude: 103.7751 },
+  HELIX_HOUSE: { latitude: 1.2913, longitude: 103.7798 },//
+  LIGHTHOUSE: { latitude: 1.2906, longitude: 103.7817 },//
+  CAPT_RC: { latitude: 1.3076, longitude: 103.7732 },//
+  RC4_RC: { latitude: 1.3082, longitude: 103.7734 },//
+  TEMBUSU_RC: { latitude: 1.3061, longitude: 103.7738 },//
+  RVRC_RC: { latitude: 1.2982, longitude: 103.7760 },//
+  UTOWN_RES: { latitude: 1.3051, longitude: 103.7739 },//
+  TCOMS: { latitude: 1.2935, longitude: 103.7770 },//
+  I3_BUILDING: { latitude: 1.2924, longitude: 103.7756 },//
+  VENTUS: { latitude: 1.2952, longitude: 103.7702 },//
+  ALUMNI_HOUSE: { latitude: 1.2933, longitude: 103.7730 }//
+};
+
+const NEARBY_NOTIFICATION_RADIUS_KM = 0.5;
+
+const toRadians = (degrees) => degrees * Math.PI / 180;
+
+const calculateDistanceKm = (pointA, pointB) => {
+  const earthRadiusKm = 6371;
+  const latitudeDifference = toRadians(pointB.latitude - pointA.latitude);
+  const longitudeDifference = toRadians(pointB.longitude - pointA.longitude);
+  const firstLatitude = toRadians(pointA.latitude);
+  const secondLatitude = toRadians(pointB.latitude);
+
+  const value =
+    Math.sin(latitudeDifference / 2) ** 2 +
+    Math.cos(firstLatitude) *
+    Math.cos(secondLatitude) *
+    Math.sin(longitudeDifference / 2) ** 2;
+
+  const angularDistance =
+    2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+
+  return earthRadiusKm * angularDistance;
 };
 
 const normaliseItemName = (value) => {
@@ -283,16 +298,30 @@ const notifyNearbyListingOwners = async ({
         continue;
       }
 
-      if (listing.location !== requestLocation) {
+      const listingCoordinates =
+        CAMPUS_COORDINATES[listing.location];
+
+      if (!listingCoordinates) {
+        continue;
+      }
+
+      const distanceKm = calculateDistanceKm(
+        requestCoordinates,
+        listingCoordinates
+      );
+
+      if (distanceKm > NEARBY_NOTIFICATION_RADIUS_KM) {
         continue;
       }
 
       if (!matchingOwners.has(listing.userId)) {
         matchingOwners.set(listing.userId, {
           listingId: listingDoc.id,
-          location: requestLocation
+          location: listing.location,
+          distanceKm
         });
       }
+
     }
 
     const notificationMessages = [];
@@ -333,7 +362,7 @@ const notifyNearbyListingOwners = async ({
 
         body:
           `@${requesterUsername || 'student'} needs ` +
-          `${requestedItem} at ${match.location}.`,
+          `${requestedItem} within ${match.distanceKm.toFixed(1)} km of you.`,
 
         data: {
           type: 'nearby_item_request',
