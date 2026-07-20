@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Modal
 } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { db, auth } from '../firebaseConfig';
 import {
   collection,
@@ -29,6 +30,43 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
+const getDateFromFirestoreValue = (value) => {
+  if (!value) return null;
+  if (value.toDate) return value.toDate();
+  if (value.seconds) return new Date(value.seconds * 1000);
+  return new Date(value);
+};
+
+const scheduleReturnReminderAsync = async ({ returnDateTimestamp, itemTitle, chatId }) => {
+  try {
+    const returnDate = getDateFromFirestoreValue(returnDateTimestamp);
+
+    if (!returnDate || Number.isNaN(returnDate.getTime())) {
+      return null;
+    }
+
+    const reminderDate = new Date(returnDate.getTime() - 24 * 60 * 60 * 1000);
+
+    if (reminderDate <= new Date()) {
+      return null;
+    }
+
+    return await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Return reminder',
+        body: `${itemTitle || 'Your borrowed item'} is due tomorrow. Arrange the handoff back soon.`,
+        sound: 'default',
+        data: { type: 'return_reminder', chatId },
+        channelId: 'return-reminders',
+      },
+      trigger: reminderDate,
+    });
+  } catch (error) {
+    console.error('Could not schedule return reminder:', error);
+    return null;
+  }
+};
+
 const isValidExpoPushToken = (token) => {
   return (
     typeof token === 'string' &&
@@ -423,10 +461,22 @@ export default function ChatScreen({ route, navigation }) {
     if (enteredOtp.trim() === expectedOtp) {
       try {
         if (txStatus === "verifying") {
+          const transactionSnapshot = await getDoc(doc(db, "transactions", activeTxId));
+          const transactionData = transactionSnapshot.exists()
+            ? transactionSnapshot.data()
+            : null;
+          const returnReminderNotificationId =
+            await scheduleReturnReminderAsync({
+              returnDateTimestamp: transactionData?.returnDateTimestamp,
+              itemTitle,
+              chatId
+            });
+
           await updateDoc(doc(db, "transactions", activeTxId), {
             status: "pending",
             otp: "",
-            otpCreatedAt: null
+            otpCreatedAt: null,
+            returnReminderNotificationId: returnReminderNotificationId || null
           });
           setOtpVerifyModalVisible(false);
           setEnteredOtp('');

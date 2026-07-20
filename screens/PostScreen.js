@@ -15,6 +15,7 @@ import {
   FlatList
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as Location from 'expo-location';
 import { db, auth } from '../firebaseConfig';
 
 import {
@@ -166,6 +167,28 @@ const calculateDistanceKm = (pointA, pointB) => {
   return earthRadiusKm * angularDistance;
 };
 
+const getCurrentRequestCoordinates = async (fallbackLocation) => {
+  try {
+    const permission = await Location.requestForegroundPermissionsAsync();
+
+    if (permission.status !== 'granted') {
+      return CAMPUS_COORDINATES[fallbackLocation] || null;
+    }
+
+    const position = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    return {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+    };
+  } catch (error) {
+    console.log('Could not use current location for nearby notifications:', error);
+    return CAMPUS_COORDINATES[fallbackLocation] || null;
+  }
+};
+
 const normaliseItemName = (value) => {
   return String(value || '')
     .trim()
@@ -256,13 +279,14 @@ const notifyNearbyListingOwners = async ({
   requesterId,
   requestedItem,
   requestLocation,
+  requestCoordinates,
   requesterUsername
 }) => {
   try {
-    const requestCoordinates =
-      CAMPUS_COORDINATES[requestLocation];
+    const notificationOriginCoordinates =
+      requestCoordinates || CAMPUS_COORDINATES[requestLocation];
 
-    if (!requestCoordinates) {
+    if (!notificationOriginCoordinates) {
       console.log(
         'No coordinates for request location:',
         requestLocation
@@ -306,7 +330,7 @@ const notifyNearbyListingOwners = async ({
       }
 
       const distanceKm = calculateDistanceKm(
-        requestCoordinates,
+        notificationOriginCoordinates,
         listingCoordinates
       );
 
@@ -668,6 +692,9 @@ function RequestForm() {
         return;
       }
 
+      const requestCoordinates =
+        await getCurrentRequestCoordinates(location);
+
       const requestDocument =
         await addDoc(
           collection(db, 'requests'),
@@ -680,6 +707,8 @@ function RequestForm() {
               normaliseItemName(trimmedItem),
 
             location: location,
+            requestLatitude: requestCoordinates?.latitude || null,
+            requestLongitude: requestCoordinates?.longitude || null,
 
             borrowdate:
               formatDateString(borrowDate),
@@ -720,6 +749,8 @@ function RequestForm() {
 
           requestLocation:
             location,
+
+          requestCoordinates,
 
           requesterUsername:
             username

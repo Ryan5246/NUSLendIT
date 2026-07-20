@@ -345,4 +345,4 @@ const styles = StyleSheet.create({
   itemChatPromptText: { fontSize: 12, fontWeight: '700', color: '#14004c', marginTop: 8, textTransform: 'uppercase' },
   sheetEmptyBox: { paddingVertical: 30, alignItems: 'center' },
   sheetEmptyText: { fontSize: 14, color: '#8e8e93', textAlign: 'center', fontWeight: '500' }
-}); 
+});
