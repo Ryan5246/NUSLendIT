@@ -15,7 +15,6 @@ import {
   FlatList
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Location from 'expo-location';
 import { db, auth } from '../firebaseConfig';
 
 import {
@@ -167,28 +166,6 @@ const calculateDistanceKm = (pointA, pointB) => {
   return earthRadiusKm * angularDistance;
 };
 
-const getCurrentRequestCoordinates = async (fallbackLocation) => {
-  try {
-    const permission = await Location.requestForegroundPermissionsAsync();
-
-    if (permission.status !== 'granted') {
-      return CAMPUS_COORDINATES[fallbackLocation] || null;
-    }
-
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-
-    return {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-    };
-  } catch (error) {
-    console.log('Could not use current location for nearby notifications:', error);
-    return CAMPUS_COORDINATES[fallbackLocation] || null;
-  }
-};
-
 const normaliseItemName = (value) => {
   return String(value || '')
     .trim()
@@ -279,14 +256,13 @@ const notifyNearbyListingOwners = async ({
   requesterId,
   requestedItem,
   requestLocation,
-  requestCoordinates,
   requesterUsername
 }) => {
   try {
-    const notificationOriginCoordinates =
-      requestCoordinates || CAMPUS_COORDINATES[requestLocation];
+    const requestCoordinates =
+      CAMPUS_COORDINATES[requestLocation];
 
-    if (!notificationOriginCoordinates) {
+    if (!requestCoordinates) {
       console.log(
         'No coordinates for request location:',
         requestLocation
@@ -330,7 +306,7 @@ const notifyNearbyListingOwners = async ({
       }
 
       const distanceKm = calculateDistanceKm(
-        notificationOriginCoordinates,
+        requestCoordinates,
         listingCoordinates
       );
 
@@ -345,7 +321,6 @@ const notifyNearbyListingOwners = async ({
           distanceKm
         });
       }
-
     }
 
     const notificationMessages = [];
@@ -386,14 +361,16 @@ const notifyNearbyListingOwners = async ({
 
         body:
           `@${requesterUsername || 'student'} needs ` +
-          `${requestedItem} within ${match.distanceKm.toFixed(1)} km of you.`,
+          `${requestedItem} within ${match.distanceKm.toFixed(1)} km of your listing at ${getCampusLocationLabel(match.location)}.`,
 
         data: {
           type: 'nearby_item_request',
           requestId,
           listingId: match.listingId,
           requestedItem,
-          requestLocation
+          requestLocation,
+          listingLocation: match.location,
+          distanceKm: Number(match.distanceKm.toFixed(2))
         }
       });
     }
@@ -692,9 +669,6 @@ function RequestForm() {
         return;
       }
 
-      const requestCoordinates =
-        await getCurrentRequestCoordinates(location);
-
       const requestDocument =
         await addDoc(
           collection(db, 'requests'),
@@ -707,8 +681,6 @@ function RequestForm() {
               normaliseItemName(trimmedItem),
 
             location: location,
-            requestLatitude: requestCoordinates?.latitude || null,
-            requestLongitude: requestCoordinates?.longitude || null,
 
             borrowdate:
               formatDateString(borrowDate),
@@ -749,8 +721,6 @@ function RequestForm() {
 
           requestLocation:
             location,
-
-          requestCoordinates,
 
           requesterUsername:
             username

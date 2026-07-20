@@ -37,6 +37,13 @@ const getDateFromFirestoreValue = (value) => {
   return new Date(value);
 };
 
+const getOneDayBeforeReturnReminderDate = (returnDate) => {
+  const reminderDate = new Date(returnDate);
+  reminderDate.setDate(reminderDate.getDate() - 1);
+  reminderDate.setHours(9, 0, 0, 0);
+  return reminderDate;
+};
+
 const scheduleReturnReminderAsync = async ({ returnDateTimestamp, itemTitle, chatId }) => {
   try {
     const returnDate = getDateFromFirestoreValue(returnDateTimestamp);
@@ -45,13 +52,13 @@ const scheduleReturnReminderAsync = async ({ returnDateTimestamp, itemTitle, cha
       return null;
     }
 
-    const reminderDate = new Date(returnDate.getTime() - 24 * 60 * 60 * 1000);
+    const reminderDate = getOneDayBeforeReturnReminderDate(returnDate);
 
     if (reminderDate <= new Date()) {
       return null;
     }
 
-    return await Notifications.scheduleNotificationAsync({
+    const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Return reminder',
         body: `${itemTitle || 'Your borrowed item'} is due tomorrow. Arrange the handoff back soon.`,
@@ -59,14 +66,18 @@ const scheduleReturnReminderAsync = async ({ returnDateTimestamp, itemTitle, cha
         data: { type: 'return_reminder', chatId },
         channelId: 'return-reminders',
       },
-      trigger: reminderDate,
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: reminderDate,
+      },
     });
+
+    return { notificationId, scheduledFor: reminderDate };
   } catch (error) {
     console.error('Could not schedule return reminder:', error);
     return null;
   }
 };
-
 const isValidExpoPushToken = (token) => {
   return (
     typeof token === 'string' &&
@@ -465,7 +476,7 @@ export default function ChatScreen({ route, navigation }) {
           const transactionData = transactionSnapshot.exists()
             ? transactionSnapshot.data()
             : null;
-          const returnReminderNotificationId =
+          const returnReminder =
             await scheduleReturnReminderAsync({
               returnDateTimestamp: transactionData?.returnDateTimestamp,
               itemTitle,
@@ -476,7 +487,8 @@ export default function ChatScreen({ route, navigation }) {
             status: "pending",
             otp: "",
             otpCreatedAt: null,
-            returnReminderNotificationId: returnReminderNotificationId || null
+            returnReminderNotificationId: returnReminder?.notificationId || null,
+            returnReminderScheduledFor: returnReminder?.scheduledFor || null
           });
           setOtpVerifyModalVisible(false);
           setEnteredOtp('');
