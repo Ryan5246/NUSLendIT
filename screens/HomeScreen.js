@@ -6,37 +6,33 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVe
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
-// HomeScreen
 export function HomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
-      
+
       <Image source={require('../assets/Logo1.png')} style={styles.logo} />
       <Text style={styles.title} >{'NUS LENDIT'}</Text>
       <Text style={styles.subtitle} >Need it now? LendIT.</Text>
-      
+
       <TouchableOpacity style={styles.logInButton} onPress={() => navigation.navigate('Login')}>
         <Text style={styles.logInButtonText} >Log In</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.signUpButton} onPress={() => navigation.navigate('SignUp')}>
         <Text style={styles.signUpButtonText}>Sign Up</Text>
       </TouchableOpacity>
-      
-      <Image source={require('../assets/Skyline.png')} style={styles.skyline} resizeMode="contain"/>
-      
+
+      <Image source={require('../assets/Skyline.png')} style={styles.skyline} resizeMode="contain" />
+
       <StatusBar style="auto" />
     </View>
   );
 }
 
-// LoginScreen
 export function LoginScreen({ navigation, route }) {
-  
-  // Extracts the secure auth bridge passed down from App.js
+
   const { auth } = route.params;
-  
-  // Track input
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -45,7 +41,7 @@ export function LoginScreen({ navigation, route }) {
     if (!email) {
       return Alert.alert('Input Required', 'Please enter your email address first to receive a reset link.');
     }
-    
+
     try {
       await sendPasswordResetEmail(auth, email.trim());
       Alert.alert('Reset Email Sent', `A password reset link has been pushed to ${email}`);
@@ -60,75 +56,71 @@ export function LoginScreen({ navigation, route }) {
     }
 
     try {
-      // Check if credentials match
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      // Check if the email link has been clicked
       if (!user.emailVerified) {
-        // Force log them out
-        await auth.signOut(); 
+        await auth.signOut();
         return Alert.alert(
-          'Account Unverified', 
+          'Account Unverified',
           'Please check your inbox (or Microsoft Defender Quarantine) and click the verification link before logging in.'
         );
       }
 
-      // Success
       const userDocRef = doc(db, 'username', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
       if (userDocSnap.exists()) {
-        // RETURNING STUDENT: Account has a username profile -> proceed straight to application
+
         navigation.reset({
           index: 0,
           routes: [{ name: 'MainTabs' }],
         });
       } else {
-        // FIRST-TIME LOGGED IN STUDENT: Missing a handle profile -> route to onboarding gate
+
         navigation.reset({
           index: 0,
           routes: [{ name: 'SetUsername' }],
         });
       }
-          
+
     } catch (error) {
       Alert.alert('Login Error', error.message);
     }
   };
-  
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      
+
       <Image source={require('../assets/Logo1.png')} style={styles.logo} resizeMode="contain" />
-      <Image source={require('../assets/Skyline.png')} style={styles.skyline} resizeMode="contain"/>
+      <Image source={require('../assets/Skyline.png')} style={styles.skyline} resizeMode="contain" />
 
       <Text style={styles.title} >{'NUS LENDIT'}</Text>
       <Text style={styles.subtitle} >Need it now? LendIT.</Text>
-      
+
       <TextInput style={styles.input} placeholder='Email' autoCapitalize='none' keyboardType='email-address' value={email} onChangeText={setEmail}></TextInput>
-      
+
       <View style={styles.inputContainer}>
-        <TextInput 
-          style={styles.inlineInput} 
-          placeholder='Password' 
-          autoCapitalize='none' 
+        <TextInput
+          style={styles.inlineInput}
+          placeholder='Password'
+          autoCapitalize='none'
           secureTextEntry={!isPasswordVisible}
-          value={password} 
+          value={password}
           onChangeText={setPassword}
         />
-        <TouchableOpacity 
-          style={styles.toggleButton} 
+        <TouchableOpacity
+          style={styles.toggleButton}
           onPress={() => setIsPasswordVisible(!isPasswordVisible)}
         >
           <Text style={styles.toggleText}>{isPasswordVisible ? 'Hide' : 'Show'}</Text>
         </TouchableOpacity>
       </View>
-      
+
       <TouchableOpacity onPress={handleForgotPassword} style={{ alignSelf: 'flex-end', marginRight: '11%', marginBottom: 15 }}>
         <Text style={{ color: '#ffffffb0', textDecorationLine: 'underline', fontSize: 14 }}>Forgot Password?</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity style={styles.logInButton2} onPress={handleLogin}>
         <Text style={styles.logInButtonText2}>Log In</Text>
       </TouchableOpacity>
@@ -142,11 +134,10 @@ export function LoginScreen({ navigation, route }) {
   );
 }
 
-// SignUpScreen
 export function SignUpScreen({ navigation, route }) {
-  
+
   const { auth } = route.params;
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -156,11 +147,10 @@ export function SignUpScreen({ navigation, route }) {
       return Alert.alert('Missing Info', 'Please enter both email and password.');
     }
 
-    // NUS email filter
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail.endsWith('@u.nus.edu')) {
       return Alert.alert(
-        'Access Restricted', 
+        'Access Restricted',
         'Only official NUS student accounts (@u.nus.edu) are allowed to register for LendIT.'
       );
     }
@@ -170,53 +160,51 @@ export function SignUpScreen({ navigation, route }) {
     }
 
     try {
-      // Create the user credentials
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-      
-      // Verification email sent
+
       await sendEmailVerification(userCredential.user);
-      
+
       Alert.alert(
-        'Email Sent!', 
-        'A verification link has been sent to your inbox (or Microsoft Defender Quarantine). Please verify before logging in.', 
+        'Email Sent!',
+        'A verification link has been sent to your inbox (or Microsoft Defender Quarantine). Please verify before logging in.',
         [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
       );
-      
+
       setEmail('');
       setPassword('');
     } catch (error) {
       Alert.alert('Registration Error', error.message);
     }
   };
-  
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      
-      <Image source={require('../assets/Logo1.png')} style={styles.logo} resizeMode="contain"/>
-      <Image source={require('../assets/Skyline.png')} style={styles.skyline} resizeMode="contain"/>
+
+      <Image source={require('../assets/Logo1.png')} style={styles.logo} resizeMode="contain" />
+      <Image source={require('../assets/Skyline.png')} style={styles.skyline} resizeMode="contain" />
 
       <Text style={styles.title} >{'NUS LENDIT'}</Text>
       <Text style={styles.subtitle} >Need it now? LendIT.</Text>
-      
+
       <TextInput style={styles.input} placeholder='Email' autoCapitalize='none' keyboardType='email-address' value={email} onChangeText={setEmail}></TextInput>
-      
+
       <View style={styles.inputContainer}>
-        <TextInput 
-          style={styles.inlineInput} 
-          placeholder='Password' 
-          autoCapitalize='none' 
+        <TextInput
+          style={styles.inlineInput}
+          placeholder='Password'
+          autoCapitalize='none'
           secureTextEntry={!isPasswordVisible}
-          value={password} 
+          value={password}
           onChangeText={setPassword}
         />
-        <TouchableOpacity 
-          style={styles.toggleButton} 
+        <TouchableOpacity
+          style={styles.toggleButton}
           onPress={() => setIsPasswordVisible(!isPasswordVisible)}
         >
           <Text style={styles.toggleText}>{isPasswordVisible ? 'Hide' : 'Show'}</Text>
         </TouchableOpacity>
       </View>
-      
+
       <TouchableOpacity style={styles.logInButton2} onPress={handleSignUp}>
         <Text style={styles.logInButtonText2}>Sign Up</Text>
       </TouchableOpacity>
@@ -235,14 +223,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#14004c',
     alignItems: 'center',
-    justifyContent: 'center', 
+    justifyContent: 'center',
   },
   logo: {
-    width:'50%',
-    height:'22%',
+    width: '50%',
+    height: '22%',
     alignItems: 'center',
     justifyContent: 'center',
-    //borderRadius: 30
   },
   title: {
     fontSize: 60,
@@ -297,7 +284,7 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({
       ios: 'Avenir Next',
       android: 'sans-serif-medium',
-  })
+    })
   },
   skyline: {
     position: 'absolute',

@@ -22,7 +22,7 @@ export default function SetUsernameScreen({ navigation }) {
   const handleSaveUsername = async () => {
     const cleanUsername = username.trim().toLowerCase();
 
-    // 1. Structural Validation Regex Rules
+
     if (!cleanUsername) {
       return Alert.alert('Required', 'Please enter a username handle.');
     }
@@ -40,7 +40,7 @@ export default function SetUsernameScreen({ navigation }) {
       const currentUserEmail = auth.currentUser?.email;
       if (!currentUserId) return;
 
-      // 2. Query Firestore to enforce absolute uniqueness across campus
+
       const q = query(collection(db, 'username'), where('username', '==', cleanUsername));
       const querySnapshot = await getDocs(q);
 
@@ -49,7 +49,7 @@ export default function SetUsernameScreen({ navigation }) {
         return Alert.alert('Already Taken', 'This username is already claimed. Try another one!');
       }
 
-      // 3. Write profile mapping record payload to Firestore
+
       const pushToken =
         await registerForPushNotificationsAsync();
 
@@ -62,7 +62,7 @@ export default function SetUsernameScreen({ navigation }) {
 
       Alert.alert('Profile Configured', `Welcome to LendIT, @${cleanUsername}!`);
 
-      // 4. Wipe history stack and push to MainTabs
+
       navigation.reset({
         index: 0,
         routes: [{ name: 'MainTabs' }],

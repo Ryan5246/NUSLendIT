@@ -3,7 +3,6 @@ import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/aut
 import { getFirestore } from 'firebase/firestore'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Ingest credentials from .env file
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
