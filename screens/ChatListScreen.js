@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { db, auth } from '../firebaseConfig';
-import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
 function ChatRoomCard({ room, currentUserId, onOpen }) {
   const [peerHandle, setPeerHandle] = useState('Loading...');
   const peerId = room.participants?.find(id => id !== currentUserId);
@@ -91,7 +91,15 @@ export default function ChatListScreen({ navigation }) {
     return () => unsubscribe();
   }, [currentUserId]);
 
-  const handleOpenRoom = (room, peerId, resolvedUsername) => {
+  const handleOpenRoom = async (room, peerId, resolvedUsername) => {
+    try {
+      await updateDoc(doc(db, 'chats', room.id), {
+        [`readTimestamps.${currentUserId}`]: Date.now()
+      });
+    } catch (error) {
+      console.error('Error marking chat as read:', error);
+    }
+
     navigation.navigate('ChatConversation', {
       chatId: room.id,
       itemTitle: room.itemTitle,

@@ -24,7 +24,6 @@ export default function ProfileActivityScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const currentUserId = auth.currentUser?.uid;
 
-
   const [editingPost, setEditingPost] = useState(null);
   const [editItem, setEditItem] = useState('');
   const [editLocation, setEditLocation] = useState('');
@@ -54,7 +53,6 @@ export default function ProfileActivityScreen({ route, navigation }) {
       const combineAndSort = () => {
         const rawCombined = activeSubTab === 'Request' ? localRequests : localListings;
 
-
         const combinedWithStages = rawCombined.map(post => {
           let liveStage = post.status || 'active';
           if (txMap[post.id]) {
@@ -72,7 +70,6 @@ export default function ProfileActivityScreen({ route, navigation }) {
         setData(combinedWithStages);
         setLoading(false);
       };
-
 
       const unsubTx = onSnapshot(qTransactions, (txSnap) => {
         txMap = {};

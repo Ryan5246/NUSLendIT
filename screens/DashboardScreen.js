@@ -153,6 +153,11 @@ export default function DashboardScreen({ navigation }) {
           listingType: type === "List" ? "listing" : "request",
           lastMessageText: "Room created. Start negotiating handoff details!",
           lastMessageTimestamp: Date.now(),
+          lastMessageSenderId: currentUserId,
+          readTimestamps: {
+            [currentUserId]: Date.now(),
+            [itemOwnerId]: Date.now()
+          },
         };
         const docRef = await addDoc(collection(db, 'chats'), newChatRoom);
         targetChatId = docRef.id;

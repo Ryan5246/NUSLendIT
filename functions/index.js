@@ -6,4 +6,3 @@ const logger = require("firebase-functions/logger");
 
 setGlobalOptions({ maxInstances: 10 });
 
-

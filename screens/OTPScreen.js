@@ -83,8 +83,6 @@ export default function OTPScreen() {
             }
         })();
 
-
-
         const unsubscribe = onSnapshot(
             doc(db, "transactions", "testTransaction"),
             (docSnap) => {

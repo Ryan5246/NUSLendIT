@@ -166,6 +166,11 @@ export default function SearchScreen({ navigation, route }) {
           listingType: activeTab === "List" ? "listing" : "request",
           lastMessageText: "Room created. Start negotiating handoff details!",
           lastMessageTimestamp: Date.now(),
+          lastMessageSenderId: currentUserId,
+          readTimestamps: {
+            [currentUserId]: Date.now(),
+            [itemOwnerId]: Date.now()
+          },
         };
         const docRef = await addDoc(collection(db, 'chats'), newChatRoom);
         targetChatId = docRef.id;

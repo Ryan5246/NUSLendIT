@@ -37,6 +37,12 @@ import {
 const Stack = createStackNavigator();
 export const navigationRef = createNavigationContainerRef();
 let pendingNotificationData = null;
+
+const getActiveRoute = (route) => {
+  if (!route?.state?.routes) return route;
+  return getActiveRoute(route.state.routes[route.state.index || 0]);
+};
+
 const navigateToChat = (data) => {
   if (!data?.chatId) return;
 
@@ -99,7 +105,8 @@ Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data || {};
     if (navigationRef.isReady()) {
-      const currentRoute = navigationRef.getCurrentRoute();
+      const rootState = navigationRef.getRootState();
+      const currentRoute = getActiveRoute(rootState?.routes?.[rootState.index || 0]) || navigationRef.getCurrentRoute();
       const isViewingActiveChat =
         currentRoute?.name === 'ChatConversation' &&
         (currentRoute?.params?.chatId === data.chatId || currentRoute?.params?.params?.chatId === data.chatId);

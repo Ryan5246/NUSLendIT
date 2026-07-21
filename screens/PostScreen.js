@@ -29,7 +29,6 @@ import {
   where
 } from 'firebase/firestore';
 
-
 export const NUS_CAMPUS_HUBS = [
   { label: "BIZ - NUS Business School", value: "BIZ" },
   { label: "CDE - College of Design and Engineering", value: "CDE" },
@@ -39,7 +38,6 @@ export const NUS_CAMPUS_HUBS = [
   { label: "MED - Yong Loo Lin School of Medicine", value: "MED" },
   { label: "SDE - School of Design and Environment", value: "SDE" },
   { label: "YST - Yong Siew Toh Conservatory of Music", value: "YST_MUSIC" },
-
 
   { label: "CLB - Central Library", value: "CENTRAL_LIBRARY" },
   { label: "YIH - Yusof Ishak House", value: "YIH" },
@@ -52,10 +50,8 @@ export const NUS_CAMPUS_HUBS = [
   { label: "NUH - National University Hospital", value: "NUH" },
   { label: "NUS Field", value: "Field" },
 
-
   { label: "Kent Ridge MRT Station", value: "KR_MRT" },
   { label: "Kent Ridge Bus Terminal", value: "KR_TERMINAL" },
-
 
   { label: "Eusoff Hall", value: "EUSOFF_HALL" },
   { label: "Kent Ridge Hall", value: "KR_HALL" },
@@ -64,13 +60,11 @@ export const NUS_CAMPUS_HUBS = [
   { label: "Sheares Hall", value: "SHEARES_HALL" },
   { label: "Temasek Hall", value: "TEMASEK_HALL" },
 
-
   { label: "PGPR - Prince George's Park Residences", value: "PGPR" },
   { label: "Pioneer House", value: "PIONEER_HOUSE" },
   { label: "Valour House", value: "VALOUR_HOUSE" },
   { label: "Helix House", value: "HELIX_HOUSE" },
   { label: "Light House", value: "LIGHTHOUSE" },
-
 
   { label: "NUSC - NUS College", value: "NUSC" },
   { label: "CAPT - College of Alice & Peter Tan", value: "CAPT_RC" },
@@ -78,7 +72,6 @@ export const NUS_CAMPUS_HUBS = [
   { label: "RVRC - Ridge View Residential College", value: "RVRC_RC" },
   { label: "UTR - UTown Residence", value: "UTOWN_RES" },
   { label: "Tembusu College", value: "TEMBUSU_RC" },
-
 
   { label: "TCOMS - Technology Centre for Offshore and Marine, Singapore", value: "TCOMS" },
   { label: "I3 Building (Innovation 4.0)", value: "I3_BUILDING" },
@@ -97,7 +90,6 @@ const formatDateString = (date) => {
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
 };
-
 
 export const CAMPUS_COORDINATES = {
   BIZ: { latitude: 1.2925, longitude: 103.7742 },
@@ -388,12 +380,6 @@ const notifyNearbyListingOwners = async ({
   }
 };
 
-
-
-
-
-
-
 const getStartOfToday = () => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -436,16 +422,13 @@ const isValidMoneyAmount = (value, allowZero = true) => {
   return allowZero ? amount >= 0 : amount > 0;
 };
 
-
 function HubPickerModal({ visible, onClose, onSelect }) {
   const [searchQuery, setSearchQuery] = useState('');
-
 
   const handleClose = () => {
     setSearchQuery('');
     onClose();
   };
-
 
   const filteredHubs = NUS_CAMPUS_HUBS.filter(hub =>
     hub.label.toLowerCase().includes(searchQuery.toLowerCase())
@@ -707,7 +690,6 @@ function RequestForm() {
             status: 'active'
           }
         );
-
 
       const notificationCount =
         await notifyNearbyListingOwners({
@@ -1115,7 +1097,6 @@ const styles = StyleSheet.create({
   modalCloseX: { fontSize: 20, fontWeight: '600', color: '#8e8e93', padding: 4 },
   locationOptionRow: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#f2f2f7' },
   locationOptionText: { fontSize: 16, fontWeight: '600', color: '#333333' },
-
 
   modalSearchWrapper: { paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#e5e5ea', marginBottom: 6 },
   modalSearchInput: { width: '100%', height: 44, borderWidth: 1.5, borderColor: '#e0e0e0', borderRadius: 12, paddingHorizontal: 14, fontSize: 15, color: '#333333', backgroundColor: '#f2f2f7' },

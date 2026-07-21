@@ -20,47 +20,47 @@ import { getCampusLocationLabel } from './PostScreen';
 const { width, height } = Dimensions.get('window');
 
 export const CAMPUS_COORDINATES = {
-  BIZ: { latitude: 1.2925, longitude: 103.7742 }, //done
-  CDE: { latitude: 1.2990, longitude: 103.7719 }, //
-  SOC: { latitude: 1.2945, longitude: 103.7741 },//
-  FASS: { latitude: 1.2942, longitude: 103.7713 },//
-  FoS: { latitude: 1.2968, longitude: 103.7801 },//
-  USC: { latitude: 1.2995, longitude: 103.7755 },//
-  MED: { latitude: 1.2965, longitude: 103.7818 },//
-  SDE: { latitude: 1.2973, longitude: 103.7707 },//
-  Field: { latitude: 1.2987, longitude: 103.7783 },//
-  NUSC: { latitude: 1.3069, longitude: 103.7720 },//
-  YST_MUSIC: { latitude: 1.3020, longitude: 103.7730 },//
-  CENTRAL_LIBRARY: { latitude: 1.2965, longitude: 103.7731 },//
-  YIH: { latitude: 1.2985, longitude: 103.7750 },//
-  SRC_UTOWN: { latitude: 1.3044, longitude: 103.7725 },//
-  ERC_UTOWN: { latitude: 1.3057, longitude: 103.7727 },//
-  UCC: { latitude: 1.3015, longitude: 103.772 },//
-  UHALL: { latitude: 1.2972, longitude: 103.7779 },//
-  MPSH: { latitude: 1.3003, longitude: 103.7761 },//
-  NUH: { latitude: 1.2937, longitude: 103.7832 },//
-  KR_MRT: { latitude: 1.2931, longitude: 103.7845 },//
-  KR_TERMINAL: { latitude: 1.2942, longitude: 103.7696 },//
-  EUSOFF_HALL: { latitude: 1.2930, longitude: 103.7703 },//
-  KR_HALL: { latitude: 1.2915, longitude: 103.7746 },//
-  KEVII_HALL: { latitude: 1.2921, longitude: 103.7809 },//
-  RAFFLES_HALL: { latitude: 1.2995, longitude: 103.7739 },//
-  SHEARES_HALL: { latitude: 1.2911, longitude: 103.7756 },//
-  TEMASEK_HALL: { latitude: 1.2925, longitude: 103.7713 },//
-  PGPR: { latitude: 1.2903, longitude: 103.7806 },//
-  PIONEER_HOUSE: { latitude: 1.2908, longitude: 103.7803 },//
+  BIZ: { latitude: 1.2925, longitude: 103.7742 }, 
+  CDE: { latitude: 1.2990, longitude: 103.7719 }, 
+  SOC: { latitude: 1.2945, longitude: 103.7741 },
+  FASS: { latitude: 1.2942, longitude: 103.7713 },
+  FoS: { latitude: 1.2968, longitude: 103.7801 },
+  USC: { latitude: 1.2995, longitude: 103.7755 },
+  MED: { latitude: 1.2965, longitude: 103.7818 },
+  SDE: { latitude: 1.2973, longitude: 103.7707 },
+  Field: { latitude: 1.2987, longitude: 103.7783 },
+  NUSC: { latitude: 1.3069, longitude: 103.7720 },
+  YST_MUSIC: { latitude: 1.3020, longitude: 103.7730 },
+  CENTRAL_LIBRARY: { latitude: 1.2965, longitude: 103.7731 },
+  YIH: { latitude: 1.2985, longitude: 103.7750 },
+  SRC_UTOWN: { latitude: 1.3044, longitude: 103.7725 },
+  ERC_UTOWN: { latitude: 1.3057, longitude: 103.7727 },
+  UCC: { latitude: 1.3015, longitude: 103.772 },
+  UHALL: { latitude: 1.2972, longitude: 103.7779 },
+  MPSH: { latitude: 1.3003, longitude: 103.7761 },
+  NUH: { latitude: 1.2937, longitude: 103.7832 },
+  KR_MRT: { latitude: 1.2931, longitude: 103.7845 },
+  KR_TERMINAL: { latitude: 1.2942, longitude: 103.7696 },
+  EUSOFF_HALL: { latitude: 1.2930, longitude: 103.7703 },
+  KR_HALL: { latitude: 1.2915, longitude: 103.7746 },
+  KEVII_HALL: { latitude: 1.2921, longitude: 103.7809 },
+  RAFFLES_HALL: { latitude: 1.2995, longitude: 103.7739 },
+  SHEARES_HALL: { latitude: 1.2911, longitude: 103.7756 },
+  TEMASEK_HALL: { latitude: 1.2925, longitude: 103.7713 },
+  PGPR: { latitude: 1.2903, longitude: 103.7806 },
+  PIONEER_HOUSE: { latitude: 1.2908, longitude: 103.7803 },
   VALOUR_HOUSE: { latitude: 1.3005, longitude: 103.7751 },
-  HELIX_HOUSE: { latitude: 1.2913, longitude: 103.7798 },//
-  LIGHTHOUSE: { latitude: 1.2906, longitude: 103.7817 },//
-  CAPT_RC: { latitude: 1.3076, longitude: 103.7732 },//
-  RC4_RC: { latitude: 1.3082, longitude: 103.7734 },//
-  TEMBUSU_RC: { latitude: 1.3061, longitude: 103.7738 },//
-  RVRC_RC: { latitude: 1.2982, longitude: 103.7760 },//
-  UTOWN_RES: { latitude: 1.3051, longitude: 103.7739 },//
-  TCOMS: { latitude: 1.2935, longitude: 103.7770 },//
-  I3_BUILDING: { latitude: 1.2924, longitude: 103.7756 },//
-  VENTUS: { latitude: 1.2952, longitude: 103.7702 },//
-  ALUMNI_HOUSE: { latitude: 1.2933, longitude: 103.7730 }//
+  HELIX_HOUSE: { latitude: 1.2913, longitude: 103.7798 },
+  LIGHTHOUSE: { latitude: 1.2906, longitude: 103.7817 },
+  CAPT_RC: { latitude: 1.3076, longitude: 103.7732 },
+  RC4_RC: { latitude: 1.3082, longitude: 103.7734 },
+  TEMBUSU_RC: { latitude: 1.3061, longitude: 103.7738 },
+  RVRC_RC: { latitude: 1.2982, longitude: 103.7760 },
+  UTOWN_RES: { latitude: 1.3051, longitude: 103.7739 },
+  TCOMS: { latitude: 1.2935, longitude: 103.7770 },
+  I3_BUILDING: { latitude: 1.2924, longitude: 103.7756 },
+  VENTUS: { latitude: 1.2952, longitude: 103.7702 },
+  ALUMNI_HOUSE: { latitude: 1.2933, longitude: 103.7730 }
 };
 
 function PeerRatingSummaryLabel({ userId }) {
@@ -165,6 +165,11 @@ export default function MapsScreen({ navigation }) {
           listingType: activeTab === "List" ? "listing" : "request",
           lastMessageText: "Room created via Map! Start negotiating details.",
           lastMessageTimestamp: Date.now(),
+          lastMessageSenderId: currentUserId,
+          readTimestamps: {
+            [currentUserId]: Date.now(),
+            [itemOwnerId]: Date.now()
+          },
         };
         const docRef = await addDoc(collection(db, 'chats'), newChatRoom);
         targetChatId = docRef.id;

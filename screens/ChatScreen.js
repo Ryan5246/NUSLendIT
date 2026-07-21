@@ -81,10 +81,8 @@ export default function ChatScreen({ route, navigation }) {
   const [initialHandoffCompleted, setInitialHandoffCompleted] = useState(false);
   const [checkingTransaction, setCheckingTransaction] = useState(true);
 
-
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [selectedRating, setSelectedRating] = useState(5);
-
 
   const [otpVerifyModalVisible, setOtpVerifyModalVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
@@ -229,7 +227,6 @@ export default function ChatScreen({ route, navigation }) {
     };
   }, [navigation, chatId, currentUserId]);
 
-
   useEffect(() => {
     if (!chatId) return;
     const q = query(collection(db, "transactions"), where("chatId", "==", chatId));
@@ -248,7 +245,6 @@ export default function ChatScreen({ route, navigation }) {
           Boolean(txData.borrowedAt) ||
           ["pending", "returning", "returned"].includes(txData.status)
         );
-
 
         if (txData.status === "verifying" && isBorrower) {
           setOtpVerifyModalVisible(true);
@@ -276,7 +272,6 @@ export default function ChatScreen({ route, navigation }) {
     });
     return () => unsubscribe();
   }, [chatId, chatInfo]);
-
 
   useEffect(() => {
     if (!otpTimestamp || !activeTxId || (txStatus !== "verifying" && txStatus !== "returning")) return;

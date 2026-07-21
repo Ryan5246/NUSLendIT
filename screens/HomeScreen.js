@@ -31,9 +31,7 @@ export function HomeScreen({ navigation }) {
 
 export function LoginScreen({ navigation, route }) {
 
-
   const { auth } = route.params;
-
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
