@@ -274,6 +274,7 @@ export default function App() {
             headerStyle: { backgroundColor: '#14004c' },
             headerTitleStyle: { color: '#ffffff', fontWeight: 'bold' },
             headerTintColor: '#ffffff',
+            headerBackTitle: 'MainTabs',
           }}
         />
 
