@@ -153,3 +153,93 @@ export async function registerForPushNotificationsAsync() {
         return null;
     }
 }
+
+export async function scheduleReturnReminder({
+    transactionId,
+    itemTitle,
+    returnDate,
+    chatId,
+    peerId,
+    peerUsername,
+}) {
+    if (!(returnDate instanceof Date) || Number.isNaN(returnDate.getTime())) {
+        throw new Error('A valid return date is required to schedule a reminder.');
+    }
+
+    const permissions = await Notifications.getPermissionsAsync();
+
+    if (permissions.status !== 'granted') {
+        return null;
+    }
+
+    const reminderDate = new Date(returnDate);
+    reminderDate.setDate(reminderDate.getDate() - 1);
+    reminderDate.setHours(0, 0, 0, 0);
+
+    const scheduledNotifications =
+        await Notifications.getAllScheduledNotificationsAsync();
+
+    await Promise.all(
+        scheduledNotifications
+            .filter(notification =>
+                notification.content.data?.type === 'return_reminder' &&
+                notification.content.data?.transactionId === transactionId
+            )
+            .map(notification =>
+                Notifications.cancelScheduledNotificationAsync(
+                    notification.identifier
+                )
+            )
+    );
+
+    const reminderHasPassed = reminderDate.getTime() <= Date.now();
+    const triggerDate = reminderHasPassed
+        ? new Date(Date.now() + 1000)
+        : reminderDate;
+
+    return Notifications.scheduleNotificationAsync({
+        content: {
+            title: 'Return reminder',
+            body: reminderHasPassed
+                ? `${itemTitle || 'Your borrowed item'} is due back today.`
+                : `${itemTitle || 'Your borrowed item'} is due back tomorrow.`,
+            sound: 'default',
+            data: {
+                type: 'return_reminder',
+                transactionId,
+                chatId,
+                peerId,
+                peerUsername,
+            },
+        },
+        trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DATE,
+            date: triggerDate,
+            channelId: Platform.OS === 'android' ? 'return-reminders' : undefined,
+        },
+    });
+}
+
+export async function cancelReturnReminder(notificationId) {
+    if (notificationId) {
+        await Notifications.cancelScheduledNotificationAsync(notificationId);
+    }
+}
+
+export async function cancelReturnRemindersForTransaction(transactionId) {
+    const scheduledNotifications =
+        await Notifications.getAllScheduledNotificationsAsync();
+
+    await Promise.all(
+        scheduledNotifications
+            .filter(notification =>
+                notification.content.data?.type === 'return_reminder' &&
+                notification.content.data?.transactionId === transactionId
+            )
+            .map(notification =>
+                Notifications.cancelScheduledNotificationAsync(
+                    notification.identifier
+                )
+            )
+    );
+}

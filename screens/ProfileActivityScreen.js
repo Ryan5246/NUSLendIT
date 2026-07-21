@@ -24,7 +24,7 @@ export default function ProfileActivityScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const currentUserId = auth.currentUser?.uid;
 
-  // Edit Overlay States
+
   const [editingPost, setEditingPost] = useState(null);
   const [editItem, setEditItem] = useState('');
   const [editLocation, setEditLocation] = useState('');
@@ -73,13 +73,12 @@ export default function ProfileActivityScreen({ route, navigation }) {
         setLoading(false);
       };
 
-      // Set up a structural reactive snapshot mesh to evaluate post lock situations in real time
+
       const unsubTx = onSnapshot(qTransactions, (txSnap) => {
         txMap = {};
         txSnap.forEach(d => {
           const txData = d.data();
           if (txData.chatId) {
-            // Match transaction track records using the common identifier token fields
             txMap[txData.itemId] = txData.status;
           }
         });
@@ -106,12 +105,10 @@ export default function ProfileActivityScreen({ route, navigation }) {
       const qTransactions = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'));
       unsubscribe = onSnapshot(qTransactions, (snapshot) => {
         const allTrans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // ✅ REGULATION 2 FIXED: Only show OTHER people's posts you interact with, AND only AFTER handoff code verification (status passes "verifying")
         const filteredTrans = allTrans.filter(t => {
           const amParticipant = t.lenderId === currentUserId || t.borrowerId === currentUserId;
           const isNotMyPost = t.ownerId !== currentUserId;
-          const isHandedOver = t.status !== "verifying"; // True only when item moves into active loan state or later
+          const isHandedOver = t.status !== "verifying";
 
           return amParticipant && isNotMyPost && isHandedOver;
         });
@@ -251,8 +248,6 @@ export default function ProfileActivityScreen({ route, navigation }) {
     if (mode === 'Your Posts') {
       const isRequest = item.type === 'Request';
       const isSoftDeleted = item.isDeleted === true;
-
-      // ✅ REGULATION 1 FIXED: Explicit layout boundary locks if item status moves past absolute active phase
       const isExchangeActive = item.status === 'finalized' || (item.calculatedStage && item.calculatedStage !== 'active');
 
       return (
@@ -289,12 +284,12 @@ export default function ProfileActivityScreen({ route, navigation }) {
             </Text>
           )}
 
-          {/* Dynamic Workflow Status String Renderer */}
+          
           <View style={styles.lifecycleStatusBadgeBox}>
             <Text style={styles.lifecycleStatusBadgeText}>{mapProgressStageText(item.calculatedStage)}</Text>
           </View>
 
-          {/* Conditional Layout Action Dispatches */}
+          
           {isSoftDeleted ? (
             <View style={styles.buttonActionRow}>
               <TouchableOpacity
@@ -306,7 +301,6 @@ export default function ProfileActivityScreen({ route, navigation }) {
               </TouchableOpacity>
             </View>
           ) : isExchangeActive ? (
-            // ✅ REGULATION 1 FIXED: Remove edit/delete access wrappers completely if item status enters active loan loops
             <View style={styles.lockedWarningBox}>
               <Text style={styles.lockedWarningLabelText}>🔒 Modification controls locked while exchange cycle is active.</Text>
             </View>
@@ -346,7 +340,7 @@ export default function ProfileActivityScreen({ route, navigation }) {
           <View style={[styles.lifecycleStatusBadgeBox, { marginTop: 10 }]}>
             <Text style={styles.lifecycleStatusBadgeText}>{mapProgressStageText(item.status)}</Text>
           </View>
-          {/* ✅ FIXED: Removed old verification text links completely from layout rendering outputs */}
+          
         </View>
       );
     }
@@ -491,8 +485,6 @@ const styles = StyleSheet.create({
   cardRow: { fontSize: 14, fontWeight: '700', color: '#555555', marginBottom: 6, lineHeight: 20 },
   cardValue: { fontWeight: '500', color: '#222222' },
   disabledText: { color: '#8e8e93' },
-
-  // Progress lifecycle badge design definitions
   lifecycleStatusBadgeBox: { backgroundColor: '#f0f0f5', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start', marginTop: 8 },
   lifecycleStatusBadgeText: { fontSize: 12, fontWeight: '700', color: '#14004c' },
 
@@ -503,8 +495,6 @@ const styles = StyleSheet.create({
   repostButton: { backgroundColor: '#2e2270', marginLeft: 0 },
   btnText: { color: '#ffffff', fontWeight: '700', fontSize: 14 },
   emptyText: { color: '#8e8e93', fontSize: 16, textAlign: 'center' },
-
-  // Locked notice text labels box parameters
   lockedWarningBox: { width: '100%', paddingVertical: 10, backgroundColor: '#f2f2f7', borderRadius: 10, marginTop: 14, alignItems: 'center', justifyContent: 'center' },
   lockedWarningLabelText: { fontStyle: 'italic', color: '#636366', fontSize: 13, fontWeight: '600', textAlign: 'center' },
 

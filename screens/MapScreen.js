@@ -83,7 +83,6 @@ export default function MapsScreen() {
 
   }, []);
 
-  // LIVE FIREBASE USER LISTENER
   useEffect(() => {
 
     const unsubscribe = onSnapshot(
@@ -98,7 +97,6 @@ export default function MapsScreen() {
 
           const data = document.data();
 
-          // DON'T SHOW CURRENT USER AS BLUE MARKER
           if (document.id !== currentUserId) {
 
             users.push({
@@ -119,7 +117,6 @@ export default function MapsScreen() {
 
   }, [currentUserId]);
 
-  // LIVE LOCATION TRACKING
   async function getLocationPermission() {
 
     const { status } =
@@ -153,7 +150,6 @@ export default function MapsScreen() {
           longitude,
         });
 
-        // SAVE LIVE LOCATION TO FIREBASE
         if (!currentUserId) return;
 
         await setDoc(
@@ -203,7 +199,7 @@ export default function MapsScreen() {
         }}
       >
 
-        {/* STATIC NUS LOCATIONS */}
+        {}
         {markerList.map((marker) => (
 
           <Marker
@@ -223,7 +219,7 @@ export default function MapsScreen() {
 
         ))}
 
-        {/* LIVE USERS */}
+        {}
         {liveUsers.map((user) => (
 
           <Marker

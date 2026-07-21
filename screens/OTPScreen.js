@@ -38,7 +38,6 @@ export default function OTPScreen() {
 
     const [enteredOtp, setEnteredOtp] = useState("");
 
-    // GENERATE OTP
     const createOTP = async () => {
 
         const otp = generateOTP();
@@ -102,7 +101,6 @@ export default function OTPScreen() {
 
     }, []);
 
-    // VERIFY OTP
     const verifyOTP = async () => {
 
         if (!transaction) return;

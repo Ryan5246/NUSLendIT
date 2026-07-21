@@ -6,7 +6,6 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVe
 import { db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 
-// HomeScreen
 export function HomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
@@ -30,7 +29,6 @@ export function HomeScreen({ navigation }) {
   );
 }
 
-// LoginScreen
 export function LoginScreen({ navigation, route }) {
 
 
@@ -60,13 +58,10 @@ export function LoginScreen({ navigation, route }) {
     }
 
     try {
-      // Check if credentials match
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      // Check if the email link has been clicked
       if (!user.emailVerified) {
-        // Force log them out
         await auth.signOut();
         return Alert.alert(
           'Account Unverified',
@@ -74,7 +69,6 @@ export function LoginScreen({ navigation, route }) {
         );
       }
 
-      // Success
       const userDocRef = doc(db, 'username', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
@@ -142,7 +136,6 @@ export function LoginScreen({ navigation, route }) {
   );
 }
 
-// SignUpScreen
 export function SignUpScreen({ navigation, route }) {
 
   const { auth } = route.params;
@@ -156,7 +149,6 @@ export function SignUpScreen({ navigation, route }) {
       return Alert.alert('Missing Info', 'Please enter both email and password.');
     }
 
-    // NUS email filter
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail.endsWith('@u.nus.edu')) {
       return Alert.alert(
@@ -170,10 +162,8 @@ export function SignUpScreen({ navigation, route }) {
     }
 
     try {
-      // Create the user credentials
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
 
-      // Verification email sent
       await sendEmailVerification(userCredential.user);
 
       Alert.alert(
@@ -242,7 +232,6 @@ const styles = StyleSheet.create({
     height: '22%',
     alignItems: 'center',
     justifyContent: 'center',
-    //borderRadius: 30
   },
   title: {
     fontSize: 60,

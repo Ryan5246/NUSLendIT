@@ -2,10 +2,7 @@ import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
 import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-
-// Firebase core app setups
 import { auth, db } from './firebaseConfig';
-
 
 import { HomeScreen, LoginScreen, SignUpScreen } from './screens/HomeScreen';
 import SetUsernameScreen from './screens/SetUsernameScreen';
@@ -22,37 +19,44 @@ import {
 
 import {
   doc,
-  setDoc
+  setDoc,
+  collection,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  where
 } from 'firebase/firestore';
 
 import {
-  registerForPushNotificationsAsync
+  registerForPushNotificationsAsync,
+  cancelReturnRemindersForTransaction,
+  scheduleReturnReminder
 } from './utils/notifications';
 
 const Stack = createStackNavigator();
-const navigationRef = createNavigationContainerRef();
-let activeRouteName = null;
-let activeRouteParams = {};
+export const navigationRef = createNavigationContainerRef();
 let pendingNotificationData = null;
+const navigateToChat = (data) => {
+  if (!data?.chatId) return;
 
-const updateActiveRoute = () => {
-  const currentRoute = navigationRef.getCurrentRoute();
-  activeRouteName = currentRoute?.name || null;
-  activeRouteParams = currentRoute?.params || {};
+  navigationRef.navigate('MainTabs', {
+    screen: 'Chat',
+    params: {
+      screen: 'ChatConversation',
+      params: {
+        chatId: data.chatId,
+        itemTitle: data.itemTitle || 'Item',
+        peerId: data.peerId,
+        peerUsername: data.peerUsername || 'student'
+      },
+      initial: false
+    }
+  });
 };
 
-const isViewingNotifiedChat = (data) => {
-  return (
-    data?.type === 'chat_message' &&
-    activeRouteName === 'ChatConversation' &&
-    activeRouteParams?.chatId === data.chatId
-  );
-};
-
-const openNotificationTarget = (data) => {
-  if (!data) {
-    return;
-  }
+const openNotificationTarget = async (data) => {
+  if (!data) return;
 
   if (!navigationRef.isReady()) {
     pendingNotificationData = data;
@@ -61,135 +65,163 @@ const openNotificationTarget = (data) => {
 
   if (data.type === 'nearby_item_request') {
     navigationRef.navigate('MainTabs', {
-      screen: 'Maps',
-      params: {
-        initialTab: 'Request',
-        focusRequestId: data.requestId,
-        focusLocation: data.requestLocation
-      }
+      screen: 'Search',
+      params: { initialTab: 'Request' }
     });
     return;
   }
+  if (data.chatId) {
+    const chatData = { ...data };
 
-  if (data.type === 'chat_message') {
-    navigationRef.navigate('MainTabs', {
-      screen: 'Chat',
-      params: {
-        screen: 'ChatConversation',
-        params: {
-          chatId: data.chatId,
-          itemTitle: data.itemTitle || 'Item',
-          peerId: data.peerId,
-          peerUsername: data.peerUsername || 'student'
-        },
-        initial: false
+    try {
+      const chatSnapshot = await getDoc(doc(db, 'chats', data.chatId));
+      const chat = chatSnapshot.exists() ? chatSnapshot.data() : null;
+
+      chatData.itemTitle = chatData.itemTitle || chat?.itemTitle;
+      chatData.peerId =
+        chatData.peerId ||
+        chat?.participants?.find(id => id !== auth.currentUser?.uid);
+
+      if (chatData.peerId && !chatData.peerUsername) {
+        const profileSnapshot = await getDoc(
+          doc(db, 'username', chatData.peerId)
+        );
+        chatData.peerUsername = profileSnapshot.data()?.username;
       }
-    });
+    } catch (error) {
+      console.error('Could not load chat notification details:', error);
+    }
+
+    navigateToChat(chatData);
   }
 };
-
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data || {};
+    if (navigationRef.isReady()) {
+      const currentRoute = navigationRef.getCurrentRoute();
+      const isViewingActiveChat =
+        currentRoute?.name === 'ChatConversation' &&
+        (currentRoute?.params?.chatId === data.chatId || currentRoute?.params?.params?.chatId === data.chatId);
 
-    if (data.foregroundCopy) {
-      return {
-        shouldShowBanner: true,
-        shouldShowList: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      };
+      if (isViewingActiveChat) {
+        return {
+          shouldShowBanner: false,
+          shouldShowList: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+        };
+      }
     }
-
     return {
-      shouldShowBanner: false,
-      shouldShowList: false,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
     };
   },
 });
 
 export default function App() {
   useEffect(() => {
+    let unsubscribeReturnUpdates = () => { };
+
     const unsubscribe = onAuthStateChanged(
       auth,
       async (user) => {
-        if (!user) {
-          return;
-        }
+        unsubscribeReturnUpdates();
+
+        if (!user) return;
 
         try {
-          const pushToken =
-            await registerForPushNotificationsAsync();
+          const pushToken = await registerForPushNotificationsAsync();
 
-          if (!pushToken) {
-            console.log(
-              'No Expo push token generated.'
+          if (pushToken) {
+            await setDoc(
+              doc(db, 'username', user.uid),
+              {
+                expoPushToken: pushToken,
+                pushTokenUpdatedAt: Date.now(),
+              },
+              { merge: true }
             );
-            return;
           }
 
-          await setDoc(
-            doc(db, 'username', user.uid),
-            {
-              expoPushToken: pushToken,
-              pushTokenUpdatedAt: Date.now(),
-            },
-            {
-              merge: true,
+          unsubscribeReturnUpdates = onSnapshot(
+            query(
+              collection(db, 'transactions'),
+              where('borrowerId', '==', user.uid)
+            ),
+            snapshot => {
+              snapshot.docs
+                .filter(transactionDoc => {
+                  const transaction = transactionDoc.data();
+                  return (
+                    transaction.status === 'returned' ||
+                    transaction.status === 'completed'
+                  );
+                })
+                .forEach(transactionDoc => {
+                  cancelReturnRemindersForTransaction(
+                    transactionDoc.id
+                  ).catch(error =>
+                    console.error('Could not cancel return reminder:', error)
+                  );
+                });
             }
           );
 
-          console.log(
-            'Push token saved to Firestore.'
+          const transactionsSnapshot = await getDocs(
+            query(
+              collection(db, 'transactions'),
+              where('borrowerId', '==', user.uid)
+            )
+          );
+
+          await Promise.all(
+            transactionsSnapshot.docs
+              .filter(transactionDoc => {
+                const transaction = transactionDoc.data();
+                return (
+                  transaction.status === 'pending' &&
+                  transaction.returnDateTimestamp?.toDate
+                );
+              })
+              .map(async transactionDoc => {
+                const transaction = transactionDoc.data();
+                const profileSnapshot = await getDoc(
+                  doc(db, 'username', transaction.lenderId)
+                );
+                return scheduleReturnReminder({
+                  transactionId: transactionDoc.id,
+                  itemTitle: transaction.itemTitle,
+                  returnDate: transaction.returnDateTimestamp.toDate(),
+                  chatId: transaction.chatId,
+                  peerId: transaction.lenderId,
+                  peerUsername:
+                    profileSnapshot.data()?.username || 'student',
+                });
+              })
           );
         } catch (error) {
-          console.error(
-            'Could not save push token:',
-            error
-          );
+          console.error('Could not save push token:', error);
         }
       }
     );
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      unsubscribeReturnUpdates();
+    };
   }, []);
 
   useEffect(() => {
-    const receivedSubscription =
-      Notifications.addNotificationReceivedListener(
-        async (notification) => {
-          const content = notification.request.content;
-          const data = content.data || {};
-
-          if (data.foregroundCopy || isViewingNotifiedChat(data)) {
-            return;
-          }
-
-          await Notifications.scheduleNotificationAsync({
-            content: {
-              title: content.title || 'NUSLendIT',
-              body: content.body || '',
-              sound: 'default',
-              data: {
-                ...data,
-                foregroundCopy: true
-              }
-            },
-            trigger: null
-          });
-        }
-      );
-
     const responseSubscription =
-      Notifications.addNotificationResponseReceivedListener(
-        (response) => {
-          openNotificationTarget(
-            response.notification.request.content.data
-          );
-        }
-      );
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        openNotificationTarget(
+          response.notification.request.content.data
+        );
+      });
 
     Notifications.getLastNotificationResponseAsync()
       .then((response) => {
@@ -204,7 +236,6 @@ export default function App() {
       });
 
     return () => {
-      receivedSubscription.remove();
       responseSubscription.remove();
     };
   }, []);
@@ -213,14 +244,12 @@ export default function App() {
     <NavigationContainer
       ref={navigationRef}
       onReady={() => {
-        updateActiveRoute();
         if (pendingNotificationData) {
           const data = pendingNotificationData;
           pendingNotificationData = null;
           openNotificationTarget(data);
         }
       }}
-      onStateChange={updateActiveRoute}
     >
       <Stack.Navigator screenOptions={{ headerShown: false }}>
 

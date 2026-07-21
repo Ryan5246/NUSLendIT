@@ -114,7 +114,7 @@ export default function TabNavigator() {
           ),
         }}
       />
-      {/* ✅ FIXED: Removed Verify tab item from this list completely */}
+      {}
     </Tab.Navigator>
   );
 }

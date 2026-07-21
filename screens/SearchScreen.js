@@ -15,7 +15,6 @@ import { db, auth } from '../firebaseConfig';
 import { collection, query, orderBy, onSnapshot, getDocs, addDoc, doc, getDoc, where } from 'firebase/firestore';
 import { getCampusLocationLabel } from './PostScreen'; 
 
-// Sub-component to fetch and cache user ratings reactively per post card
 function UserRatingBadge({ userId }) {
   const [ratingInfo, setRatingInfo] = useState({ avg: 0, count: 0 });
 
@@ -88,7 +87,6 @@ export default function SearchScreen({ navigation, route }) {
       const qRequests = query(collection(db, 'requests'), orderBy('createdAt', 'desc'));
       unsubscribeRequests = onSnapshot(qRequests, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // ✅ FIXED: Ensures posts marked as "finalized" are dropped from search feeds
         const peerRequests = allDocs.filter(doc =>
           doc.userId !== currentUserId && 
           !blockedUserIds.includes(doc.userId) &&
@@ -104,7 +102,6 @@ export default function SearchScreen({ navigation, route }) {
       const qListings = query(collection(db, 'listings'), orderBy('createdAt', 'desc'));
       unsubscribeListings = onSnapshot(qListings, (snapshot) => {
         const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // ✅ FIXED: Ensures listings marked as "finalized" are dropped from search feeds
         const peerListings = allDocs.filter(doc =>
           doc.userId !== currentUserId && 
           !blockedUserIds.includes(doc.userId) &&

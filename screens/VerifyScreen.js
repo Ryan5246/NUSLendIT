@@ -304,7 +304,6 @@ export default function VerifyScreen() {
         }
     };
 
-    // No transaction
     if (!transaction) {
         return (
             <View style={styles.container}>
@@ -317,7 +316,6 @@ export default function VerifyScreen() {
     const isLender = transaction.lenderId === currentUserId;
     const isBorrower = transaction.borrowerId === currentUserId;
 
-    // Lender Screen
     if (isLender) {
         return (
             <View style={styles.container}>
@@ -341,7 +339,6 @@ export default function VerifyScreen() {
         );
     }
 
-    // Borrower Screen
     if (isBorrower) {
         return (
             <View style={styles.container}>
@@ -382,7 +379,6 @@ export default function VerifyScreen() {
         );
     }
 
-    // User not involved
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Verification</Text>

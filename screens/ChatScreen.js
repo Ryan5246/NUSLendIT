@@ -13,7 +13,6 @@ import {
   ActivityIndicator,
   Modal
 } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { db, auth } from '../firebaseConfig';
 import {
   collection,
@@ -30,54 +29,10 @@ import {
   where,
   getDocs
 } from 'firebase/firestore';
-const getDateFromFirestoreValue = (value) => {
-  if (!value) return null;
-  if (value.toDate) return value.toDate();
-  if (value.seconds) return new Date(value.seconds * 1000);
-  return new Date(value);
-};
-
-const getOneDayBeforeReturnReminderDate = (returnDate) => {
-  const reminderDate = new Date(returnDate);
-  reminderDate.setDate(reminderDate.getDate() - 1);
-  reminderDate.setHours(9, 0, 0, 0);
-  return reminderDate;
-};
-
-const scheduleReturnReminderAsync = async ({ returnDateTimestamp, itemTitle, chatId }) => {
-  try {
-    const returnDate = getDateFromFirestoreValue(returnDateTimestamp);
-
-    if (!returnDate || Number.isNaN(returnDate.getTime())) {
-      return null;
-    }
-
-    const reminderDate = getOneDayBeforeReturnReminderDate(returnDate);
-
-    if (reminderDate <= new Date()) {
-      return null;
-    }
-
-    const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Return reminder',
-        body: `${itemTitle || 'Your borrowed item'} is due tomorrow. Arrange the handoff back soon.`,
-        sound: 'default',
-        data: { type: 'return_reminder', chatId },
-        channelId: 'return-reminders',
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
-        date: reminderDate,
-      },
-    });
-
-    return { notificationId, scheduledFor: reminderDate };
-  } catch (error) {
-    console.error('Could not schedule return reminder:', error);
-    return null;
-  }
-};
+import {
+  cancelReturnReminder,
+  scheduleReturnReminder,
+} from '../utils/notifications';
 const isValidExpoPushToken = (token) => {
   return (
     typeof token === 'string' &&
@@ -123,6 +78,7 @@ export default function ChatScreen({ route, navigation }) {
   const [transactionExists, setTransactionExists] = useState(false);
   const [activeTxId, setActiveTxId] = useState(null);
   const [txStatus, setTxStatus] = useState(null);
+  const [initialHandoffCompleted, setInitialHandoffCompleted] = useState(false);
   const [checkingTransaction, setCheckingTransaction] = useState(true);
 
 
@@ -141,6 +97,24 @@ export default function ChatScreen({ route, navigation }) {
   useEffect(() => {
     paramsRef.current = { chatId, peerId };
   }, [chatId, peerId]);
+
+  useEffect(() => {
+    if (!chatId || !currentUserId) return;
+
+    const markChatAsRead = async () => {
+      try {
+        await updateDoc(doc(db, 'chats', chatId), {
+          [`readTimestamps.${currentUserId}`]: Date.now()
+        });
+      } catch (error) {
+        console.error('Could not mark chat as read:', error);
+      }
+    };
+
+    markChatAsRead();
+    const unsubscribeFocus = navigation.addListener('focus', markChatAsRead);
+    return unsubscribeFocus;
+  }, [navigation, chatId, currentUserId]);
 
   useEffect(() => {
     if (!currentUserId || !peerId) return;
@@ -235,13 +209,25 @@ export default function ChatScreen({ route, navigation }) {
           return msgTime > clearThreshold;
         });
       setMessages(loaded);
+
+      if (
+        navigation.isFocused() &&
+        loaded[0]?.senderId &&
+        loaded[0].senderId !== currentUserId
+      ) {
+        updateDoc(doc(db, 'chats', chatId), {
+          [`readTimestamps.${currentUserId}`]: Date.now()
+        }).catch(error =>
+          console.error('Could not update chat read state:', error)
+        );
+      }
     });
 
     return () => {
       unsubscribeChat();
       unsubscribeMessages();
     };
-  }, [chatId, currentUserId]);
+  }, [navigation, chatId, currentUserId]);
 
 
   useEffect(() => {
@@ -258,6 +244,10 @@ export default function ChatScreen({ route, navigation }) {
         setTxStatus(txData.status);
         setExpectedOtp(txData.otp || '');
         setOtpTimestamp(txData.otpCreatedAt || null);
+        setInitialHandoffCompleted(
+          Boolean(txData.borrowedAt) ||
+          ["pending", "returning", "returned"].includes(txData.status)
+        );
 
 
         if (txData.status === "verifying" && isBorrower) {
@@ -273,12 +263,14 @@ export default function ChatScreen({ route, navigation }) {
         setTxStatus("completed");
         setOtpVerifyModalVisible(false);
         setOtpTimestamp(null);
+        setInitialHandoffCompleted(true);
       } else {
         setTransactionExists(false);
         setActiveTxId(null);
         setTxStatus(null);
         setOtpVerifyModalVisible(false);
         setOtpTimestamp(null);
+        setInitialHandoffCompleted(false);
       }
       setCheckingTransaction(false);
     });
@@ -472,28 +464,50 @@ export default function ChatScreen({ route, navigation }) {
     if (enteredOtp.trim() === expectedOtp) {
       try {
         if (txStatus === "verifying") {
-          const transactionSnapshot = await getDoc(doc(db, "transactions", activeTxId));
-          const transactionData = transactionSnapshot.exists()
-            ? transactionSnapshot.data()
-            : null;
-          const returnReminder =
-            await scheduleReturnReminderAsync({
-              returnDateTimestamp: transactionData?.returnDateTimestamp,
-              itemTitle,
-              chatId
-            });
+          const activeTransactionSnapshot = await getDoc(
+            doc(db, "transactions", activeTxId)
+          );
+          const activeTransaction = activeTransactionSnapshot.data();
+          const returnDate = activeTransaction?.returnDateTimestamp?.toDate();
+
+          if (!returnDate) {
+            Alert.alert(
+              "Return Date Missing",
+              "This transaction does not have a valid return date."
+            );
+            return;
+          }
+
+          const returnReminderNotificationId = await scheduleReturnReminder({
+            transactionId: activeTxId,
+            itemTitle: activeTransaction.itemTitle || itemTitle,
+            returnDate,
+            chatId,
+            peerId,
+            peerUsername: peerHandle,
+          });
 
           await updateDoc(doc(db, "transactions", activeTxId), {
             status: "pending",
             otp: "",
             otpCreatedAt: null,
-            returnReminderNotificationId: returnReminder?.notificationId || null,
-            returnReminderScheduledFor: returnReminder?.scheduledFor || null
+            borrowedAt: serverTimestamp(),
+            returnReminderNotificationId: returnReminderNotificationId || null,
+            returnReminderScheduledAt: returnReminderNotificationId
+              ? serverTimestamp()
+              : null,
           });
           setOtpVerifyModalVisible(false);
           setEnteredOtp('');
           Alert.alert("Success", "Handoff verified! The item is now out on loan.");
         } else if (txStatus === "returning") {
+          const activeTransactionSnapshot = await getDoc(
+            doc(db, "transactions", activeTxId)
+          );
+          await cancelReturnReminder(
+            activeTransactionSnapshot.data()?.returnReminderNotificationId
+          );
+
           await updateDoc(doc(db, "transactions", activeTxId), {
             status: "returned",
             otp: "",
@@ -583,7 +597,13 @@ export default function ChatScreen({ route, navigation }) {
     try {
       setInputText('');
       await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId: currentUserId, text: cleanMsg, createdAt: serverTimestamp() });
-      await updateDoc(doc(db, 'chats', chatId), { lastMessageText: cleanMsg, lastMessageTimestamp: Date.now() });
+      const sentAt = Date.now();
+      await updateDoc(doc(db, 'chats', chatId), {
+        lastMessageText: cleanMsg,
+        lastMessageTimestamp: sentAt,
+        lastMessageSenderId: currentUserId,
+        [`readTimestamps.${currentUserId}`]: sentAt
+      });
 
       const recipientProfileSnapshot = await getDoc(doc(db, 'username', peerId));
       const recipientProfile = recipientProfileSnapshot.exists()
@@ -642,7 +662,6 @@ export default function ChatScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safeContainer}>
 
-      { }
       <Modal visible={otpVerifyModalVisible} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -675,7 +694,6 @@ export default function ChatScreen({ route, navigation }) {
         </View>
       </Modal>
 
-      { }
       <Modal visible={ratingModalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -705,8 +723,7 @@ export default function ChatScreen({ route, navigation }) {
         <View style={{ height: 74, justifyContent: 'center', alignItems: 'center' }}><ActivityIndicator size="small" color="#14004c" /></View>
       ) : (
         <>
-          { }
-          {txStatus !== "verifying" && txStatus !== "returning" && txStatus !== "returned" && txStatus !== "completed" && isPostOwner && (
+          {txStatus !== "verifying" && txStatus !== "returning" && txStatus !== "returned" && txStatus !== "completed" && isPostOwner && (chatInfo.status !== "finalized" || !initialHandoffCompleted) && (
             chatInfo.status !== "finalized" ? (
               <TouchableOpacity style={styles.finalizeBtn} onPress={handleFinalizeChoice} activeOpacity={0.8}>
                 <Text style={styles.finalizeBtnText}>🎯 Finalize Partner Choice</Text>
@@ -718,35 +735,30 @@ export default function ChatScreen({ route, navigation }) {
             )
           )}
 
-          { }
           {!transactionExists && isLender && chatInfo.status === "finalized" && (
             <TouchableOpacity style={styles.transactionBtn} onPress={startTransaction} activeOpacity={0.8}>
               <Text style={styles.transactionBtnText}>Start Transaction</Text>
             </TouchableOpacity>
           )}
 
-          { }
           {txStatus === "verifying" && isLender && (
             <TouchableOpacity style={styles.waitingBanner} onPress={() => Alert.alert("🔑 Code Reminder", `Provide this code to the borrower: ${expectedOtp}`)}>
               <Text style={[styles.waitingBannerText, { color: '#14004c' }]}>🔑 Code: {expectedOtp} ({timeLeft}s left)</Text>
             </TouchableOpacity>
           )}
 
-          { }
           {txStatus === "pending" && isBorrower && (
             <TouchableOpacity style={styles.returnBtn} onPress={handleReturnProductAsset} activeOpacity={0.8}>
               <Text style={styles.returnBtnText}>🔄 Confirm Item Return</Text>
             </TouchableOpacity>
           )}
 
-          { }
           {txStatus === "returning" && isBorrower && (
             <TouchableOpacity style={styles.waitingBanner} onPress={() => Alert.alert("🔑 Code Reminder", `Provide this return code to the lender: ${expectedOtp}`)}>
               <Text style={[styles.waitingBannerText, { color: '#00875a' }]}>🔑 Return Code: {expectedOtp} ({timeLeft}s left)</Text>
             </TouchableOpacity>
           )}
 
-          { }
           {txStatus === "returning" && isLender && (
             <TouchableOpacity style={[styles.waitingBanner, { backgroundColor: '#e6f4ea', borderColor: '#34a85350' }]} onPress={() => setOtpVerifyModalVisible(true)}>
               <Text style={[styles.waitingBannerText, { color: '#137333' }]}>🔒 Borrower Returning Item! Tap to Enter Code ({timeLeft}s left)</Text>
