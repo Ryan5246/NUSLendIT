@@ -70,14 +70,12 @@ export function LoginScreen({ navigation, route }) {
       const userDocRef = doc(db, 'username', user.uid);
       const userDocSnap = await getDoc(userDocRef);
 
-      if (userDocSnap.exists()) {
-
+      if (userDocSnap.exists() && userDocSnap.data()?.username) {
         navigation.reset({
           index: 0,
           routes: [{ name: 'MainTabs' }],
         });
       } else {
-
         navigation.reset({
           index: 0,
           routes: [{ name: 'SetUsername' }],
