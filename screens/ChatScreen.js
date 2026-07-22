@@ -18,6 +18,7 @@ import {
   Share
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { db, auth } from '../firebaseConfig';
 import {
   collection,
@@ -277,18 +278,25 @@ export default function ChatScreen({ route, navigation }) {
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       quality: 0.5,
-      base64: true,
+      allowsEditing: false,
     });
 
     if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
       return;
     }
 
-    const selectedAsset = pickerResult.assets[0];
-    const imageUri = `data:image/jpeg;base64,${selectedAsset.base64}`;
+    const originalUri = pickerResult.assets[0].uri;
 
     setUploadingImage(true);
     try {
+      const manipulatedImage = await ImageManipulator.manipulateAsync(
+        originalUri,
+        [{ resize: { width: 800 } }],
+        { compress: 0.3, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+
+      const imageUri = `data:image/jpeg;base64,${manipulatedImage.base64}`;
+
       const messagesRef = collection(db, 'chats', chatId, 'messages');
       await addDoc(messagesRef, {
         senderId: currentUserId,
