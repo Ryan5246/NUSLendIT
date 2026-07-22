@@ -29,7 +29,7 @@ export default function ChatStackNavigator() {
         component={ChatScreen} 
         options={({ route, navigation }) => ({
           title: route.params?.peerUsername ? `@${route.params.peerUsername}` : 'Chat', 
-          headerBackTitle: 'LendIT Inbox',
+          headerBackTitle: 'Inbox',
           headerBackTitleStyle: { fontSize: 18, fontWeight: '400' },
 
           headerRight: () => (

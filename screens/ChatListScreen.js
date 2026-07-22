@@ -2,20 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { db, auth } from '../firebaseConfig';
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
+
 function ChatRoomCard({ room, currentUserId, onOpen }) {
   const [peerHandle, setPeerHandle] = useState('Loading...');
+  const [peerRating, setPeerRating] = useState(null);
   const peerId = room.participants?.find(id => id !== currentUserId);
 
   useEffect(() => {
-    const fetchPeerHandle = async () => {
+    const fetchPeerData = async () => {
       if (!peerId) {
         setPeerHandle('Unknown User');
         return;
       }
       try {
         const docSnap = await getDoc(doc(db, 'username', peerId));
-        if (docSnap.exists() && docSnap.data().username) {
-          setPeerHandle(`💬 @${docSnap.data().username}`);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.username) {
+            setPeerHandle(`@${data.username}`);
+          } else {
+            setPeerHandle('Campus Peer');
+          }
+          const rawRating = data.averageRating || data.rating || data.stars;
+          if (rawRating) {
+            setPeerRating(Number(rawRating).toFixed(1));
+          }
         } else {
           setPeerHandle('Campus Peer');
         }
@@ -23,7 +34,7 @@ function ChatRoomCard({ room, currentUserId, onOpen }) {
         setPeerHandle('Campus Peer');
       }
     };
-    fetchPeerHandle();
+    fetchPeerData();
   }, [peerId]);
 
   const clearTime = room.clearedTimestamps?.[currentUserId] || 0;
@@ -48,7 +59,9 @@ function ChatRoomCard({ room, currentUserId, onOpen }) {
       <View style={styles.cardHeader}>
         <View style={styles.usernameRow}>
           {isUnread && <View style={styles.unreadDot} />}
-          <Text style={[styles.usernameTag, isUnread && styles.usernameTagUnread]}>{peerHandle}</Text>
+          <Text style={[styles.usernameTag, isUnread && styles.usernameTagUnread]}>
+            {peerHandle} {peerRating ? `⭐ ${peerRating}` : ''}
+          </Text>
         </View>
         <Text style={[styles.timeTag, isUnread && styles.timeTagUnread]}>
           {room.lastMessageTimestamp ? new Date(room.lastMessageTimestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}

@@ -11,8 +11,13 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  Modal
+  Modal,
+  Image,
+  TouchableWithoutFeedback,
+  Keyboard,
+  Share
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { db, auth } from '../firebaseConfig';
 import {
   collection,
@@ -27,12 +32,13 @@ import {
   setDoc,
   deleteDoc,
   where,
-  getDocs
+  deleteField
 } from 'firebase/firestore';
 import {
   cancelReturnReminder,
   scheduleReturnReminder,
 } from '../utils/notifications';
+
 const isValidExpoPushToken = (token) => {
   return (
     typeof token === 'string' &&
@@ -58,11 +64,11 @@ const sendExpoPushMessage = async (message) => {
   );
 
   const responseData = await response.json();
-
   if (!response.ok) {
     console.error('Chat notification error:', responseData);
   }
 };
+
 export default function ChatScreen({ route, navigation }) {
   const chatId = route.params?.chatId || route.params?.params?.chatId;
   const itemTitle = route.params?.itemTitle || route.params?.params?.itemTitle || 'Item';
@@ -71,6 +77,7 @@ export default function ChatScreen({ route, navigation }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [peerHandle, setPeerHandle] = useState('Campus Peer');
+  const [peerRating, setPeerRating] = useState(null);
   const [isPeerBlocked, setIsPeerBlocked] = useState(false);
   const currentUserId = auth.currentUser?.uid;
 
@@ -83,6 +90,13 @@ export default function ChatScreen({ route, navigation }) {
 
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [selectedRating, setSelectedRating] = useState(5);
+
+  const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [submittingReport, setSubmittingReport] = useState(false);
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [fullScreenImageUri, setFullScreenImageUri] = useState(null);
 
   const [otpVerifyModalVisible, setOtpVerifyModalVisible] = useState(false);
   const [enteredOtp, setEnteredOtp] = useState('');
@@ -125,6 +139,13 @@ export default function ChatScreen({ route, navigation }) {
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
+      headerTitle: () => (
+        <View style={{ alignItems: 'center' }}>
+          <Text style={{ color: '#ffffff', fontWeight: 'bold', fontSize: 16 }}>
+            @{peerHandle} {peerRating ? `⭐ ${peerRating}` : ''}
+          </Text>
+        </View>
+      ),
       headerRight: () => (
         <TouchableOpacity
           style={styles.headerMenuButton}
@@ -133,7 +154,8 @@ export default function ChatScreen({ route, navigation }) {
             const activePeerId = paramsRef.current.peerId;
             const options = [
               { text: "Cancel", style: "cancel" },
-              { text: "Clear Chat History", style: "destructive", onPress: () => executeClearHistory(activeChatId) }
+              { text: "Clear Chat History", style: "destructive", onPress: () => executeClearHistory(activeChatId) },
+              { text: "Report User", style: "destructive", onPress: () => setReportModalVisible(true) }
             ];
             if (isPeerBlocked) {
               options.push({ text: "Unblock User", onPress: () => executeUnblock(activePeerId) });
@@ -148,7 +170,7 @@ export default function ChatScreen({ route, navigation }) {
         </TouchableOpacity>
       ),
     });
-  }, [navigation, isPeerBlocked]);
+  }, [navigation, isPeerBlocked, peerHandle, peerRating]);
 
   const executeClearHistory = async (targetId) => {
     if (!targetId) return;
@@ -180,13 +202,145 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
+  const handleDeleteSingleMessage = (messageId) => {
+    Alert.alert(
+      "Unsend Message",
+      "This message will be replaced with 'Message deleted' for everyone in the chat.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Unsend",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const msgRef = doc(db, 'chats', chatId, 'messages', messageId);
+              await updateDoc(msgRef, {
+                text: "Message deleted",
+                imageUrl: deleteField(),
+                isDeleted: true
+              });
+
+              await updateDoc(doc(db, 'chats', chatId), {
+                lastMessageText: "Message deleted",
+                lastMessageTimestamp: Date.now()
+              });
+            } catch (error) {
+              console.error("Error unsending message:", error);
+              Alert.alert("Error", "Could not unsend message.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleSubmitReport = async () => {
+    const cleanReason = reportReason.trim();
+    if (!cleanReason) {
+      Alert.alert("Reason Required", "Please provide a brief reason for reporting this user.");
+      return;
+    }
+
+    Keyboard.dismiss();
+    setSubmittingReport(true);
+
+    try {
+      await addDoc(collection(db, 'reports'), {
+        reporterId: currentUserId,
+        reportedUserId: peerId,
+        chatId: chatId,
+        itemTitle: itemTitle,
+        reason: cleanReason,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+
+      setSubmittingReport(false);
+      setReportModalVisible(false);
+      setReportReason('');
+      Alert.alert("Report Submitted", "Thank you. Our moderation team will review this incident.");
+    } catch (error) {
+      setSubmittingReport(false);
+      Alert.alert("Error", "Could not submit report. Please try again.");
+    }
+  };
+
+  const handlePickImage = async () => {
+    if (isPeerBlocked) return;
+
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      Alert.alert("Permission Required", "Camera roll permissions are required to share photos.");
+      return;
+    }
+
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.5,
+      base64: true,
+    });
+
+    if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
+      return;
+    }
+
+    const selectedAsset = pickerResult.assets[0];
+    const imageUri = `data:image/jpeg;base64,${selectedAsset.base64}`;
+
+    setUploadingImage(true);
+    try {
+      const messagesRef = collection(db, 'chats', chatId, 'messages');
+      await addDoc(messagesRef, {
+        senderId: currentUserId,
+        imageUrl: imageUri,
+        text: '📷 Photo',
+        createdAt: serverTimestamp(),
+      });
+
+      const sentAt = Date.now();
+      const chatRoomDocRef = doc(db, 'chats', chatId);
+      await updateDoc(chatRoomDocRef, {
+        lastMessageText: '📷 Photo',
+        lastMessageTimestamp: sentAt,
+        lastMessageSenderId: currentUserId,
+        [`readTimestamps.${currentUserId}`]: sentAt
+      });
+
+      setUploadingImage(false);
+    } catch (error) {
+      console.error("Error sending image:", error);
+      setUploadingImage(false);
+      Alert.alert("Upload Failed", "Could not send the image.");
+    }
+  };
+
+  const handleSaveOrShareImage = async (imageUri) => {
+    try {
+      await Share.share({
+        url: imageUri,
+        title: 'Shared Image'
+      });
+    } catch (error) {
+      Alert.alert("Error", "Could not share or download image.");
+    }
+  };
+
   useEffect(() => {
-    const fetchPeerHandle = async () => {
+    const fetchPeerData = async () => {
       if (!peerId) return;
-      const docSnap = await getDoc(doc(db, 'username', peerId));
-      if (docSnap.exists() && docSnap.data().username) setPeerHandle(docSnap.data().username);
+      try {
+        const docSnap = await getDoc(doc(db, 'username', peerId));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.username) setPeerHandle(data.username);
+          const rawRating = data.averageRating || data.rating || data.stars;
+          if (rawRating) setPeerRating(Number(rawRating).toFixed(1));
+        }
+      } catch (err) {
+        console.error("Error fetching peer data: ", err);
+      }
     };
-    fetchPeerHandle();
+    fetchPeerData();
   }, [peerId]);
 
   useEffect(() => {
@@ -288,11 +442,9 @@ export default function ChatScreen({ route, navigation }) {
 
         try {
           if (txStatus === "verifying") {
-
             await deleteDoc(doc(db, "transactions", activeTxId));
             Alert.alert("Token Expired", "The 3-minute validation limit has passed. Please re-generate a new code.");
           } else if (txStatus === "returning") {
-
             await updateDoc(doc(db, "transactions", activeTxId), {
               status: "pending",
               otp: "",
@@ -376,48 +528,27 @@ export default function ChatScreen({ route, navigation }) {
 
       if (chatInfo.listingType === "listing") {
         lenderId = chatInfo.ownerId;
-        borrowerId =
-          chatInfo.ownerId === currentUserId
-            ? peerId
-            : currentUserId;
+        borrowerId = chatInfo.ownerId === currentUserId ? peerId : currentUserId;
       } else {
         borrowerId = chatInfo.ownerId;
-        lenderId =
-          chatInfo.ownerId === currentUserId
-            ? peerId
-            : currentUserId;
+        lenderId = chatInfo.ownerId === currentUserId ? peerId : currentUserId;
       }
 
-      const sourceCollection =
-        chatInfo.listingType === "request"
-          ? "requests"
-          : "listings";
-
-      const postSnapshot = await getDoc(
-        doc(db, sourceCollection, chatInfo.itemId)
-      );
+      const sourceCollection = chatInfo.listingType === "request" ? "requests" : "listings";
+      const postSnapshot = await getDoc(doc(db, sourceCollection, chatInfo.itemId));
 
       if (!postSnapshot.exists()) {
-        Alert.alert(
-          "Error",
-          "The original post could not be found."
-        );
+        Alert.alert("Error", "The original post could not be found.");
         return;
       }
 
       const postData = postSnapshot.data();
-
       if (!postData.returnDateTimestamp) {
-        Alert.alert(
-          "Return Date Missing",
-          "This post does not have a valid return date."
-        );
+        Alert.alert("Return Date Missing", "This post does not have a valid return date.");
         return;
       }
 
-      const securityPinCode = Math.floor(
-        100000 + Math.random() * 900000
-      ).toString();
+      const securityPinCode = Math.floor(100000 + Math.random() * 900000).toString();
 
       await addDoc(collection(db, "transactions"), {
         chatId,
@@ -426,9 +557,7 @@ export default function ChatScreen({ route, navigation }) {
         borrowerId,
         ownerId: chatInfo.ownerId || currentUserId,
         listingType: chatInfo.listingType || "listing",
-
         returnDateTimestamp: postData.returnDateTimestamp,
-
         status: "verifying",
         otp: securityPinCode,
         otpCreatedAt: Date.now(),
@@ -442,16 +571,11 @@ export default function ChatScreen({ route, navigation }) {
       );
     } catch (err) {
       console.error("Start transaction error:", err);
-
-      Alert.alert(
-        "Error",
-        "Could not start the transaction."
-      );
+      Alert.alert("Error", "Could not start the transaction.");
     }
   };
 
   const handleVerifyOtpToken = async () => {
-
     if (Date.now() - otpTimestamp > 180000) {
       return Alert.alert("Expired", "This code has run out of time. Please generate a new one.");
     }
@@ -459,17 +583,12 @@ export default function ChatScreen({ route, navigation }) {
     if (enteredOtp.trim() === expectedOtp) {
       try {
         if (txStatus === "verifying") {
-          const activeTransactionSnapshot = await getDoc(
-            doc(db, "transactions", activeTxId)
-          );
+          const activeTransactionSnapshot = await getDoc(doc(db, "transactions", activeTxId));
           const activeTransaction = activeTransactionSnapshot.data();
           const returnDate = activeTransaction?.returnDateTimestamp?.toDate();
 
           if (!returnDate) {
-            Alert.alert(
-              "Return Date Missing",
-              "This transaction does not have a valid return date."
-            );
+            Alert.alert("Return Date Missing", "This transaction does not have a valid return date.");
             return;
           }
 
@@ -488,20 +607,14 @@ export default function ChatScreen({ route, navigation }) {
             otpCreatedAt: null,
             borrowedAt: serverTimestamp(),
             returnReminderNotificationId: returnReminderNotificationId || null,
-            returnReminderScheduledAt: returnReminderNotificationId
-              ? serverTimestamp()
-              : null,
+            returnReminderScheduledAt: returnReminderNotificationId ? serverTimestamp() : null,
           });
           setOtpVerifyModalVisible(false);
           setEnteredOtp('');
           Alert.alert("Success", "Handoff verified! The item is now out on loan.");
         } else if (txStatus === "returning") {
-          const activeTransactionSnapshot = await getDoc(
-            doc(db, "transactions", activeTxId)
-          );
-          await cancelReturnReminder(
-            activeTransactionSnapshot.data()?.returnReminderNotificationId
-          );
+          const activeTransactionSnapshot = await getDoc(doc(db, "transactions", activeTxId));
+          await cancelReturnReminder(activeTransactionSnapshot.data()?.returnReminderNotificationId);
 
           await updateDoc(doc(db, "transactions", activeTxId), {
             status: "returned",
@@ -589,7 +702,20 @@ export default function ChatScreen({ route, navigation }) {
   const handleSendMessage = async () => {
     const cleanMsg = inputText.trim();
     if (!cleanMsg || !chatId || !peerId) return;
+
     try {
+      const blockCheckId1 = `${currentUserId}_${peerId}`;
+      const blockCheckId2 = `${peerId}_${currentUserId}`;
+
+      const snap1 = await getDoc(doc(db, 'blocks', blockCheckId1));
+      const snap2 = await getDoc(doc(db, 'blocks', blockCheckId2));
+
+      if ((snap1.exists() && Object.keys(snap1.data() || {}).length > 0) ||
+        (snap2.exists() && Object.keys(snap2.data() || {}).length > 0)) {
+        Alert.alert("Action Blocked", "You cannot exchange messages with this student channel.");
+        return;
+      }
+
       setInputText('');
       await addDoc(collection(db, 'chats', chatId, 'messages'), { senderId: currentUserId, text: cleanMsg, createdAt: serverTimestamp() });
       const sentAt = Date.now();
@@ -601,16 +727,12 @@ export default function ChatScreen({ route, navigation }) {
       });
 
       const recipientProfileSnapshot = await getDoc(doc(db, 'username', peerId));
-      const recipientProfile = recipientProfileSnapshot.exists()
-        ? recipientProfileSnapshot.data()
-        : null;
+      const recipientProfile = recipientProfileSnapshot.exists() ? recipientProfileSnapshot.data() : null;
       const recipientPushToken = recipientProfile?.expoPushToken;
 
       if (isValidExpoPushToken(recipientPushToken)) {
         const senderProfileSnapshot = await getDoc(doc(db, 'username', currentUserId));
-        const senderProfile = senderProfileSnapshot.exists()
-          ? senderProfileSnapshot.data()
-          : null;
+        const senderProfile = senderProfileSnapshot.exists() ? senderProfileSnapshot.data() : null;
 
         await sendExpoPushMessage({
           to: recipientPushToken,
@@ -635,11 +757,48 @@ export default function ChatScreen({ route, navigation }) {
 
   const renderMessageBubble = ({ item }) => {
     const isSenderMe = item.senderId === currentUserId;
+    const isDeleted = item.isDeleted || item.text === "Message deleted";
+
+    const handleAction = () => {
+      if (isDeleted) return;
+      if (item.imageUrl) {
+        setFullScreenImageUri(item.imageUrl);
+      } else if (isSenderMe) {
+        handleDeleteSingleMessage(item.id);
+      }
+    };
+
     return (
       <View style={[styles.rowContainer, isSenderMe ? styles.myRow : styles.theirRow]}>
-        <View style={[styles.bubbleBlock, isSenderMe ? styles.myBubble : styles.theirBubble]}>
-          <Text style={isSenderMe ? styles.myBubbleText : styles.theirBubbleText}>{item.text}</Text>
-        </View>
+        <TouchableOpacity
+          activeOpacity={isDeleted ? 1 : 0.7}
+          delayLongPress={200}
+          onLongPress={() => {
+            if (isSenderMe && !isDeleted) {
+              handleDeleteSingleMessage(item.id);
+            }
+          }}
+          onPress={handleAction}
+          style={[
+            styles.bubbleBlock,
+            isSenderMe ? styles.myBubble : styles.theirBubble,
+            item.imageUrl && !isDeleted && styles.imageBubbleBlock,
+            isDeleted && styles.deletedBubble
+          ]}
+        >
+          {item.imageUrl && !isDeleted ? (
+            <Image source={{ uri: item.imageUrl }} style={styles.messageImage} />
+          ) : (
+            <Text
+              style={[
+                isSenderMe ? styles.myBubbleText : styles.theirBubbleText,
+                isDeleted && styles.deletedBubbleText
+              ]}
+            >
+              {isDeleted ? "Message deleted" : item.text}
+            </Text>
+          )}
+        </TouchableOpacity>
       </View>
     );
   };
@@ -656,6 +815,84 @@ export default function ChatScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safeContainer}>
+
+      <Modal visible={reportModalVisible} animationType="slide" transparent={true}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback accessible={false}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Report User</Text>
+                <Text style={styles.modalSubtitle}>
+                  Help us keep the community safe. Why are you reporting @{peerHandle}?
+                </Text>
+
+                <TextInput
+                  style={styles.reportInputBox}
+                  placeholder="Describe the issue (e.g. spam, inappropriate messages, scam...)"
+                  placeholderTextColor="#a0a0a0"
+                  value={reportReason}
+                  onChangeText={setReportReason}
+                  multiline={true}
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setReportModalVisible(false);
+                      setReportReason('');
+                    }}
+                    disabled={submittingReport}
+                  >
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.submitReportBtn}
+                    onPress={handleSubmitReport}
+                    disabled={submittingReport}
+                  >
+                    {submittingReport ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.submitReportBtnText}>Submit Report</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal visible={!!fullScreenImageUri} animationType="fade" transparent={true}>
+        <View style={styles.fullScreenModalOverlay}>
+          <TouchableOpacity
+            style={styles.closeFullScreenBtn}
+            onPress={() => setFullScreenImageUri(null)}
+          >
+            <Text style={styles.closeFullScreenBtnText}>✕ Close</Text>
+          </TouchableOpacity>
+
+          {fullScreenImageUri && (
+            <Image
+              source={{ uri: fullScreenImageUri }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          )}
+
+          <TouchableOpacity
+            style={styles.downloadBtn}
+            onPress={() => handleSaveOrShareImage(fullScreenImageUri)}
+          >
+            <Text style={styles.downloadBtnText}>📥 Save / Share Image</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
 
       <Modal visible={otpVerifyModalVisible} animationType="fade" transparent={true}>
         <View style={styles.modalOverlay}>
@@ -776,8 +1013,36 @@ export default function ChatScreen({ route, navigation }) {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <View style={styles.inputActionRow}>
-          <TextInput style={styles.textInputBox} placeholder="Suggest a meeting hub..." placeholderTextColor="#a0a0a0" value={inputText} onChangeText={setInputText} multiline />
-          <TouchableOpacity style={styles.dispatchButton} onPress={handleSendMessage} activeOpacity={0.8}><Text style={styles.dispatchButtonText}>Send</Text></TouchableOpacity>
+          <TouchableOpacity
+            style={styles.imagePickerBtn}
+            onPress={handlePickImage}
+            disabled={isPeerBlocked || uploadingImage}
+          >
+            {uploadingImage ? (
+              <ActivityIndicator color="#14004c" size="small" />
+            ) : (
+              <Text style={styles.imagePickerBtnIcon}>📷</Text>
+            )}
+          </TouchableOpacity>
+
+          <TextInput
+            style={[styles.textInputBox, isPeerBlocked && { backgroundColor: '#f0f0f5', color: '#8e8e93' }]}
+            placeholder={isPeerBlocked ? "You have blocked this user" : "Suggest a meeting hub..."}
+            placeholderTextColor="#a0a0a0"
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            editable={!isPeerBlocked}
+          />
+
+          <TouchableOpacity
+            style={[styles.dispatchButton, isPeerBlocked && { backgroundColor: '#cccccc' }]}
+            onPress={handleSendMessage}
+            disabled={isPeerBlocked}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.dispatchButtonText}>Send</Text>
+          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -794,10 +1059,14 @@ const styles = StyleSheet.create({
   myRow: { justifyContent: 'flex-end' },
   theirRow: { justifyContent: 'flex-start' },
   bubbleBlock: { maxWidth: '75%', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
+  imageBubbleBlock: { paddingHorizontal: 0, paddingVertical: 0, overflow: 'hidden', borderRadius: 16 },
   myBubble: { backgroundColor: '#14004c', borderBottomRightRadius: 4 },
   myBubbleText: { color: '#ffffff', fontSize: 16, lineHeight: 22 },
   theirBubble: { backgroundColor: '#f0f0f5', borderBottomLeftRadius: 4 },
   theirBubbleText: { color: '#14004c', fontSize: 16, lineHeight: 22 },
+  deletedBubble: { backgroundColor: '#f0f0f5', borderWidth: 1, borderColor: '#e5e5ea' },
+  deletedBubbleText: { color: '#8e8e93', fontStyle: 'italic', fontSize: 14 },
+  messageImage: { width: 220, height: 200, borderRadius: 16, resizeMode: 'cover' },
   finalizeBtn: { backgroundColor: "#2e2270", marginHorizontal: 15, marginTop: 15, padding: 15, borderRadius: 10, alignItems: "center" },
   finalizeBtnText: { color: "white", fontWeight: "bold", fontSize: 16 },
   undoFinalizeBtn: { backgroundColor: "#ffffff", marginHorizontal: 15, marginTop: 15, padding: 15, borderRadius: 10, alignItems: "center", borderWidth: 2, borderColor: "#2e2270" },
@@ -810,9 +1079,11 @@ const styles = StyleSheet.create({
   waitingBannerText: { color: "#b78103", fontWeight: "700", textAlign: 'center' },
   completedBanner: { backgroundColor: "#f2f2f7", margin: 15, padding: 14, borderRadius: 10, alignItems: "center" },
   completedBannerText: { color: "#00875a", fontWeight: "700", fontSize: 15 },
-  inputActionRow: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#e5e5ea' },
+  inputActionRow: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: '#ffffff', borderTopWidth: 1, borderTopColor: '#e5e5ea' },
+  imagePickerBtn: { paddingHorizontal: 8, paddingVertical: 8, marginRight: 6, justifyContent: 'center', alignItems: 'center' },
+  imagePickerBtnIcon: { fontSize: 22 },
   textInputBox: { flex: 1, backgroundColor: '#fafafa', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 16, maxHeight: 90, borderWidth: 1.5, borderColor: '#e0e0e0' },
-  dispatchButton: { marginLeft: 14, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#14004c', borderRadius: 20 },
+  dispatchButton: { marginLeft: 10, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#14004c', borderRadius: 20 },
   dispatchButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
   headerMenuButton: { paddingHorizontal: 16 },
   headerMenuText: { color: '#ffffff', fontSize: 22, fontWeight: 'bold' },
@@ -820,6 +1091,18 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: 'white', width: '85%', borderRadius: 20, padding: 24, alignItems: 'center' },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#14004c', marginBottom: 10 },
   modalSubtitle: { fontSize: 14, color: '#636366', textAlign: 'center', marginBottom: 20 },
+  reportInputBox: { width: '100%', height: 100, backgroundColor: '#f8f8fc', borderRadius: 12, borderWidth: 1.5, borderColor: '#e5e5ea', padding: 12, fontSize: 14, color: '#222222', marginBottom: 20 },
+  modalButtonRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+  cancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#e5e5ea', alignItems: 'center', marginRight: 8 },
+  cancelBtnText: { color: '#636366', fontWeight: 'bold', fontSize: 15 },
+  submitReportBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#ff3b30', alignItems: 'center', marginLeft: 8 },
+  submitReportBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
+  fullScreenModalOverlay: { flex: 1, backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' },
+  closeFullScreenBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  closeFullScreenBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
+  fullScreenImage: { width: '100%', height: '75%' },
+  downloadBtn: { position: 'absolute', bottom: 40, backgroundColor: '#14004c', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25 },
+  downloadBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
   starRow: { flexDirection: 'row', marginBottom: 24 },
   starItem: { fontSize: 42, marginHorizontal: 6 },
   submitReviewBtn: { backgroundColor: '#14004c', width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
